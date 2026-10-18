@@ -1,0 +1,294 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  natives:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest supported Ubuntu, so older distributions can load the library
+          - platform: linux-x64
+            os: ubuntu-22.04
+            library: libliquidbounce_wry.so
+          - platform: linux-arm64
+            os: ubuntu-22.04-arm
+            library: libliquidbounce_wry.so
+          - platform: windows-x64
+            os: windows-2025
+            library: liquidbounce_wry.dll
+          - platform: macos-arm64
+            os: macos-15
+            library: libliquidbounce_wry.dylib
+          # Built on the same runner, so not self-tested
+          - platform: macos-x64
+            os: macos-15
+            target: x86_64-apple-darwin
+            library: libliquidbounce_wry.dylib
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+        working-directory: native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install WebKitGTK
+        if: runner.os == 'Linux'
+        working-directory: .
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libxkbcommon-dev
+      - name: Update Rust
+        run: |
+          rustup update stable --no-self-update && rustup default stable
+          if [ -n "$TARGET" ]; then rustup target add "$TARGET"; fi
+        env:
+          TARGET: ${{ matrix.target }}
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+          key: ${{ matrix.platform }}
+      - name: Build
+        run: cargo build --release --locked ${TARGET:+--target "$TARGET"}
+        env:
+          TARGET: ${{ matrix.target }}
+      - name: Self-test
+        if: ${{ !matrix.target }}
+        run: |
+          set -o pipefail
+          limit() { if command -v timeout >/dev/null; then timeout "$@"; else perl -e 'alarm shift; exec @ARGV' "$@"; fi; }
+          mkdir -p selftest
+          limit 300 target/release/selftest selftest/memory 2>&1 | tee selftest/memory.txt
+      # Frames that stay on the GPU: shared textures on Windows, IOSurfaces on macOS
+      - name: Self-test on the GPU
+        if: ${{ !matrix.target && runner.os != 'Linux' }}
+        run: |
+          set -o pipefail
+          limit() { if command -v timeout >/dev/null; then timeout "$@"; else perl -e 'alarm shift; exec @ARGV' "$@"; fi; }
+          limit 300 target/release/selftest selftest/gpu gpu 2>&1 | tee selftest/gpu.txt
+      - name: Collect library
+        run: |
+          mkdir -p ../natives/${{ matrix.platform }}
+          cp target/${TARGET:+$TARGET/}release/${{ matrix.library }} ../natives/${{ matrix.platform }}/
+        env:
+          TARGET: ${{ matrix.target }}
+      # The libraries carry these crates, their licenses go into the jar next to them
+      - name: Collect licenses
+        if: matrix.platform == 'linux-x64'
+        run: |
+          curl -sSfL https://github.com/EmbarkStudios/cargo-about/releases/download/0.9.2/cargo-about-0.9.2-x86_64-unknown-linux-musl.tar.gz | tar xz -C "$RUNNER_TEMP"
+          cargo fetch --locked
+          "$RUNNER_TEMP/cargo-about-0.9.2-x86_64-unknown-linux-musl/cargo-about" generate --locked --fail about.hbs \
+            -o ../natives/THIRD-PARTY-LICENSES.txt
+      - name: Upload library
+        uses: actions/upload-artifact@v7
+        with:
+          name: natives-${{ matrix.platform }}
+          path: natives/
+      - name: Upload self-test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: selftest-${{ matrix.platform }}
+          path: native/selftest/
+          if-no-files-found: ignore
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+        working-directory: native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Update Rust
+        run: |
+          rustup update stable --no-self-update && rustup default stable
+          rustup target add aarch64-linux-android
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+          key: android-arm64
+      - name: Build
+        run: |
+          set -euo pipefail
+          NDK="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-}}"
+          [ -d "$NDK" ] || { echo "[ERROR] no Android NDK at '$NDK'" >&2; exit 1; }
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/aarch64-linux-android21-clang"
+          export CC_aarch64_linux_android="$TOOLCHAIN/aarch64-linux-android21-clang"
+          export AR_aarch64_linux_android="$TOOLCHAIN/llvm-ar"
+          cargo build --release --locked --lib --target aarch64-linux-android
+      - name: Collect library
+        run: |
+          mkdir -p ../natives/android-arm64
+          cp target/aarch64-linux-android/release/libliquidbounce_wry.so ../natives/android-arm64/
+      - name: Upload library
+        uses: actions/upload-artifact@v7
+        with:
+          name: natives-android-arm64
+          path: natives/
+
+  build:
+    needs: [ natives, android ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setting up JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Download libraries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: natives-*
+          path: natives
+          merge-multiple: true
+      - name: Build
+        run: ./gradlew build -Pnatives=natives
+      - name: Check libraries in the jar
+        run: |
+          set -euo pipefail
+          JAR=$(find build/libs -name '*.jar' -not -name '*-sources.jar' | head -n1)
+          unzip -l "$JAR" | grep 'natives/'
+          [ "$(unzip -l "$JAR" | grep -c 'natives/.*liquidbounce_wry')" = "$(find natives -name '*liquidbounce_wry*' | wc -l)" ]
+          unzip -l "$JAR" | grep -q 'natives/THIRD-PARTY-LICENSES.txt'
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: addon
+          path: build/libs/*.jar
+
+      - name: Publish snapshot release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          JAR=$(find build/libs -name '*.jar' -not -name '*-sources.jar' | head -n1)
+          [ -n "$JAR" ] || { echo "[ERROR] no jar in build/libs" >&2; exit 1; }
+
+          NOTES="Automatic build of \`${GITHUB_SHA::7}\` from \`main\`.
+
+          Not a stable release - it tracks whatever is on main right now."
+
+          # Recreate rather than edit: `gh release upload --clobber` cannot retarget the tag when
+          # main has moved on.
+          gh release delete snapshot --cleanup-tag --yes || true
+          gh release create snapshot "$JAR" \
+            --title "Snapshot" \
+            --notes "$NOTES" \
+            --prerelease \
+            --target "$GITHUB_SHA"
+
+      - name: Attach jar to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          JAR=$(find build/libs -name '*.jar' -not -name '*-sources.jar' | head -n1)
+          [ -n "$JAR" ] || { echo "[ERROR] no jar in build/libs" >&2; exit 1; }
+
+          # The tag names the version the jar was built as, e.g. v1.0.0+26.3
+          TAG="${{ github.event.release.tag_name }}"
+          case "$JAR" in
+            *"-${TAG#v}.jar") ;;
+            *) echo "[ERROR] $JAR does not match the tag $TAG, check mod_version and minecraft" >&2; exit 1 ;;
+          esac
+
+          gh release upload "$TAG" "$JAR" --clobber
+
+      - name: Publish to the marketplace
+        if: github.event_name == 'release' && !github.event.release.prerelease && vars.MARKETPLACE_ITEM_ID != ''
+        env:
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          ITEM_ID: ${{ vars.MARKETPLACE_ITEM_ID }}
+          VERSION: ${{ github.event.release.tag_name }}
+          CHANGELOG: ${{ github.event.release.body }}
+          SOURCE_RELEASE_URL: ${{ github.event.release.html_url }}
+        run: |
+          set -euo pipefail
+          SOURCE_COMMIT=$(git rev-parse HEAD)
+
+          JAR=$(find build/libs -name '*.jar' -not -name '*-sources.jar' | head -n1)
+          [ -n "$JAR" ] || { echo "[ERROR] no jar in build/libs" >&2; exit 1; }
+
+          # The client unpacks a revision and expects exactly one jar at its root.
+          zip -j addon.zip "$JAR"
+
+          # --form-string: -F would read a release body starting with @ as a file path.
+          curl --fail-with-body -X POST \
+            "https://api.liquidbounce.net/api/v3/marketplace/$ITEM_ID/revisions" \
+            -H "Authorization: Bearer $API_TOKEN" \
+            -F "file=@addon.zip" \
+            --form-string "version=$VERSION" \
+            --form-string "changelog=$CHANGELOG" \
+            --form-string "source_repository=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --form-string "source_ref=$GITHUB_REF" \
+            --form-string "source_commit=$SOURCE_COMMIT" \
+            --form-string "source_release_tag=$VERSION" \
+            --form-string "source_release_url=$SOURCE_RELEASE_URL" \
+            --form-string "source_build_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+  gametest:
+    needs: natives
+    runs-on: ubuntu-latest
+    # A client that fails to start or hangs must not hold the runner for hours
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setting up JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Download the Linux library
+        uses: actions/download-artifact@v7
+        with:
+          name: natives-linux-x64
+          path: natives
+      # The game renders through Mesa's EGL; the page is drawn by WebKitGTK
+      - name: Install Xvfb, EGL and WebKitGTK
+        run: sudo apt-get update && sudo apt-get install -y xvfb libegl1 libegl-mesa0 libwebkit2gtk-4.1-0
+      - name: Run game tests
+        env:
+          # Minecraft asks for an sRGB framebuffer, which Xvfb's GLX does not offer
+          SDL_VIDEO_FORCE_EGL: 1
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest -Pnatives=natives
+
+      - name: Upload game test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gametest
+          path: |
+            build/run/clientGameTest/screenshots/
+            build/run/clientGameTest/logs/latest.log
+          if-no-files-found: ignore

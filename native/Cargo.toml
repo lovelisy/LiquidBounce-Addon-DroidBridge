@@ -1,0 +1,74 @@
+[package]
+name = "liquidbounce-wry"
+version = "1.0.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+
+[lib]
+name = "liquidbounce_wry"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jni = "0.21"
+serde_json = "1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+wry = { version = "0.57", default-features = false, features = ["os-webview"] }
+gtk = "0.18"
+glib = "0.18"
+cairo = { version = "0.18", package = "cairo-rs" }
+webkit2gtk = { version = "2.0", features = ["v2_40"] }
+smithay = { version = "0.7", default-features = false, features = ["wayland_frontend"] }
+libc = "0.2"
+png = "0.17"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+webview2-com = "0.39"
+windows-core = "0.62"
+windows-numerics = "0.3"
+png = "0.17"
+windows = { version = "0.62", features = [
+    "Foundation",
+    "Graphics",
+    "Graphics_Capture",
+    "Graphics_DirectX",
+    "Graphics_DirectX_Direct3D11",
+    "System",
+    "UI_Composition",
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_System_WinRT",
+    "Win32_System_WinRT_Direct3D11",
+    "Win32_System_WinRT_Graphics_Capture",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+wry = "0.57"
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"
+objc2-web-kit = "0.3"
+objc2-quartz-core = "0.3"
+objc2-metal = { version = "0.3", features = ["objc2-io-surface"] }
+objc2-io-surface = "0.3"
+objc2-core-foundation = "0.3"
+objc2-core-graphics = "0.3"
+raw-window-handle = "0.6"
+png = "0.17"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"
