@@ -133,6 +133,10 @@ internal abstract class WryGpuImporter : AutoCloseable {
                 return null
             }
 
+            if (WryNative.isAndroid) {
+                return null
+            }
+
             return runCatching {
                 when (Platform.get()) {
                     Platform.LINUX -> WryDmaBufImporter.create()

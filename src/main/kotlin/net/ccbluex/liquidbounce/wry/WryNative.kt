@@ -16,7 +16,7 @@ internal object WryNative {
     /**
      * The platform in the naming of the libraries in the jar, or null if there is none for this system.
      */
-    private val isAndroid = System.getenv("ANDROID_DATA") != null || File("/system/build.prop").isFile
+    internal val isAndroid = System.getenv("ANDROID_DATA") != null || File("/system/build.prop").isFile
 
     private val platform: String? = run {
         val arch = when (System.getProperty("os.arch").lowercase()) {
@@ -94,7 +94,7 @@ internal object WryNative {
 
         val bytes = WryNative::class.java.getResourceAsStream(resource!!)!!.use { it.readBytes() }
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        val file = folder.resolve(hash.take(16)).resolve(libraryName)
+        val file = loadableFolder(folder).resolve(hash.take(16)).resolve(libraryName)
         if (!file.isFile || file.length() != bytes.size.toLong()) {
             file.parentFile.mkdirs()
             val temporary = File(file.parentFile, "$libraryName.tmp")
@@ -104,6 +104,15 @@ internal object WryNative {
 
         System.load(file.absolutePath)
         isLoaded = true
+    }
+
+    private fun loadableFolder(folder: File): File {
+        if (!isAndroid) {
+            return folder
+        }
+        val writable = System.getenv("TMPDIR")?.takeIf(String::isNotBlank)
+            ?: System.getProperty("java.io.tmpdir")?.takeIf(String::isNotBlank)
+        return writable?.let { File(it, "wry-natives") } ?: folder
     }
 
     const val EVENT_LOG = 0
