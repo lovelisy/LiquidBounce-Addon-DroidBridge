@@ -46,7 +46,7 @@ pub fn find() -> api::Result<JavaVM> {
         }
         let vm = match unsafe { JavaVM::from_raw(*pointer) } {
             Ok(vm) => vm,
-            Err(error) => continue,
+            Err(_) => continue,
         };
         let android = match vm.attach_current_thread_permanently() {
             Ok(mut env) => env.find_class("android/os/Build").is_ok(),

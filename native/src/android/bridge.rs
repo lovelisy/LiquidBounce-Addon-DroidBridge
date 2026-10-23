@@ -114,12 +114,12 @@ impl Bridge {
             .l()
             .map_err(|error| format!("WryBridge.probe returned nothing: {error}"))?;
 
-        Ok(format!("{} | {}", read(&mut env, &started)?, read(&mut env, &probed)?))
+        Ok(format!("{} | {}", read(&mut env, started)?, read(&mut env, probed)?))
     }
 }
 
-fn read(env: &mut jni::JNIEnv, value: &JObject) -> api::Result<String> {
-    let value = JString::from(value.clone());
+fn read(env: &mut jni::JNIEnv, value: JObject) -> api::Result<String> {
+    let value = JString::from(value);
     let text = env
         .get_string(&value)
         .map_err(|error| format!("reading the bridge's answer failed: {error}"))?;
