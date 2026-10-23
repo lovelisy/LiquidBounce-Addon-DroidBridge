@@ -10,11 +10,8 @@ pub struct Engine {
 
 impl Engine {
     pub fn start(options: StartOptions) -> api::Result<Self> {
-        api::info("[Wry] looking for the Android runtime");
         let vm = art::find()?;
-        api::info("[Wry] found ART, loading the bridge");
         let bridge = bridge::Bridge::attach(vm, &options.data_dir)?;
-        api::info("[Wry] starting the bridge");
         let report = bridge.start()?;
         api::info(format!("[Wry] {report}"));
         Ok(Self { bridge: Some(bridge), next: 1 })
@@ -33,10 +30,6 @@ impl Engine {
             .ok_or_else(|| "the Android bridge is not running".to_string())?;
         let id = self.next;
         self.next += 1;
-        api::info(format!(
-            "[Wry] browser {id} asked for {} ({}x{})",
-            options.url, options.width, options.height
-        ));
         let report = bridge.create(&options.url)?;
         api::info(format!("[Wry] {report}"));
         Ok(id)
@@ -46,6 +39,14 @@ impl Engine {
         if let Some(bridge) = self.bridge.as_ref() {
             if let Err(error) = bridge.close() {
                 api::warn(format!("[Wry] closing the webview failed: {error}"));
+            }
+        }
+    }
+
+    pub fn set_visible(&mut self, _id: BrowserId, visible: bool) {
+        if let Some(bridge) = self.bridge.as_ref() {
+            if let Err(error) = bridge.set_visible(visible) {
+                api::warn(format!("[Wry] setting the webview visibility failed: {error}"));
             }
         }
     }

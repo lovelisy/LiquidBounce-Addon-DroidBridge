@@ -136,15 +136,15 @@ jobs:
           [ -d "$SDK" ] || { echo "[ERROR] no Android SDK at '$SDK'" >&2; exit 1; }
           API="$(ls "$SDK/platforms" | sed 's/^android-//' | sort -n | tail -1)"
           TOOLS="$(ls "$SDK/build-tools" | sort -V | tail -1)"
-          mkdir -p ../android-bridge/classes ../android-bridge/dex
+          mkdir -p ../src/android-bridge/classes ../src/android-bridge/dex
           javac -source 8 -target 8 -bootclasspath "$SDK/platforms/android-$API/android.jar" \
-            -d ../android-bridge/classes \
-            $(find ../android-bridge/src -name '*.java')
+            -d ../src/android-bridge/classes \
+            $(find ../src/android-bridge/src -name '*.java')
           "$SDK/build-tools/$TOOLS/d8" --min-api 21 \
             --lib "$SDK/platforms/android-$API/android.jar" \
-            --output ../android-bridge/dex \
-            $(find ../android-bridge/classes -name '*.class')
-          cp ../android-bridge/dex/classes.dex android-bridge.dex
+            --output ../src/android-bridge/dex \
+            $(find ../src/android-bridge/classes -name '*.class')
+          cp ../src/android-bridge/dex/classes.dex android-bridge.dex
       - name: Build
         run: |
           set -euo pipefail

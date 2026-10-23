@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Application;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -48,7 +49,7 @@ public final class WryBridge {
                     detach();
                     long begin = System.nanoTime();
                     WebView view = new WebView(activity);
-                    view.setBackgroundColor(0xFF000000);
+                    view.setBackgroundColor(0x00000000);
                     view.getSettings().setJavaScriptEnabled(true);
                     view.getSettings().setDomStorageEnabled(true);
                     view.getSettings().setSupportZoom(false);
@@ -58,6 +59,7 @@ public final class WryBridge {
                             ViewGroup.LayoutParams.MATCH_PARENT);
                     activity.addContentView(view, params);
                     view.bringToFront();
+                    view.setVisibility(View.INVISIBLE);
                     view.loadUrl(url);
                     view.requestFocus();
                     webView = view;
@@ -75,6 +77,18 @@ public final class WryBridge {
             }
         });
         return await(latch, outcome);
+    }
+
+    public static String setVisible(final boolean visible) {
+        main.post(new Runnable() {
+            @Override
+            public void run() {
+                if (webView != null) {
+                    webView.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+                }
+            }
+        });
+        return "visibility " + visible;
     }
 
     public static String close() {

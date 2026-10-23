@@ -103,7 +103,14 @@ class WryBrowser internal constructor(
             }
         }
 
-    override var visible = true
+    override var visible = false
+        set(value) {
+            if (field == value) {
+                return
+            }
+            field = value
+            onRenderThread { WryNative.setVisible(id, value) }
+        }
 
     private val renderer = BrowserRenderer(this)
     private val inputListener: InputListener? = inputAcceptor?.let { InputListener(this, this, it) }

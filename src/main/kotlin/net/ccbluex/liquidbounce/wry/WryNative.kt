@@ -150,6 +150,9 @@ internal object WryNative {
     external fun closeBrowser(id: Long)
 
     @JvmStatic
+    external fun setVisible(id: Long, visible: Boolean)
+
+    @JvmStatic
     external fun navigate(id: Long, url: String)
 
     @JvmStatic

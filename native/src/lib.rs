@@ -136,6 +136,7 @@ macro_rules! browser_call {
 }
 
 browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_closeBrowser() => |engine, env, id| engine.close_browser(id));
+browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_setVisible(visible: jboolean) => |engine, env, id| engine.set_visible(id, visible != 0));
 browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_navigate(url: JString) => |engine, env, id| {
     let url = string(env, &url)?;
     engine.navigate(id, url)
