@@ -209,7 +209,7 @@ impl Bridge {
         read(&mut env, closed)
     }
 
-    fn activity(&self, env: &mut jni::JNIEnv) -> api::Result<JObject> {
+    fn activity<'a>(&self, mut env: &mut jni::JNIEnv<'a>) -> api::Result<JObject<'a>> {
         let thread = jni!(
             env,
             env.call_static_method(
