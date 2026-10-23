@@ -40,7 +40,17 @@ impl Bridge {
             Err(_) => true,
         };
         if stale {
+            let _ = fs::remove_file(&dex);
             fs::write(&dex, DEX).map_err(|error| format!("writing {} failed: {error}", dex.display()))?;
+        }
+
+        let mut permissions = fs::metadata(&dex)
+            .map_err(|error| format!("reading {} failed: {error}", dex.display()))?
+            .permissions();
+        if !permissions.readonly() {
+            permissions.set_readonly(true);
+            fs::set_permissions(&dex, permissions)
+                .map_err(|error| format!("making {} read-only failed: {error}", dex.display()))?;
         }
 
         let application = match env.call_static_method(
@@ -161,6 +171,7 @@ fn take_exception(env: &mut jni::JNIEnv) -> String {
         Ok(throwable) if !throwable.is_null() => throwable,
         _ => return "no Java exception".into(),
     };
+    let _ = env.exception_clear();
     let text = env
         .call_method(&throwable, "toString", "()Ljava/lang/String;", &[])
         .map_err(|error| error.to_string())
