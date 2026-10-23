@@ -6,3 +6,6 @@ run/
 .kotlin/
 
 /native/target/
+/native/android-bridge.dex
+/android-bridge/classes/
+/android-bridge/dex/
