@@ -120,7 +120,7 @@ impl Bridge {
         Ok(Self { vm, class })
     }
 
-    pub fn probe(&self) -> api::Result<String> {
+    pub fn start(&self) -> api::Result<String> {
         let mut env = self
             .vm
             .attach_current_thread_permanently()
@@ -142,27 +142,133 @@ impl Bridge {
             return Err("ActivityThread.currentApplication returned null".into());
         }
 
+        let suffix = jni!(env, env.new_string("wry"), "creating the data suffix");
         let class = unsafe { JClass::from_raw(self.class.as_raw()) };
         let started = jni!(
             env,
-            env.call_static_method(class, "start", "(Landroid/app/Application;)Ljava/lang/String;", &[
-                JValue::Object(&application),
-            ]),
+            env.call_static_method(
+                class,
+                "start",
+                "(Landroid/app/Application;Ljava/lang/String;)Ljava/lang/String;",
+                &[
+                    JValue::Object(&application),
+                    JValue::Object(&JObject::from(suffix)),
+                ],
+            ),
             "WryBridge.start"
         )
         .l()
         .map_err(|error| format!("WryBridge.start returned nothing: {error}"))?;
 
+        read(&mut env, started)
+    }
+
+    pub fn create(&self, url: &str) -> api::Result<String> {
+        let mut env = self
+            .vm
+            .attach_current_thread_permanently()
+            .map_err(|error| format!("attaching to ART failed: {error}"))?;
+
+        let activity = self.activity(&mut env)?;
+        let url = jni!(env, env.new_string(url), "creating the url");
         let class = unsafe { JClass::from_raw(self.class.as_raw()) };
-        let probed = jni!(
+        let created = jni!(
             env,
-            env.call_static_method(class, "probe", "()Ljava/lang/String;", &[]),
-            "WryBridge.probe"
+            env.call_static_method(
+                class,
+                "create",
+                "(Landroid/app/Activity;Ljava/lang/String;)Ljava/lang/String;",
+                &[
+                    JValue::Object(&activity),
+                    JValue::Object(&JObject::from(url)),
+                ],
+            ),
+            "WryBridge.create"
         )
         .l()
-        .map_err(|error| format!("WryBridge.probe returned nothing: {error}"))?;
+        .map_err(|error| format!("WryBridge.create returned nothing: {error}"))?;
 
-        Ok(format!("{} | {}", read(&mut env, started)?, read(&mut env, probed)?))
+        read(&mut env, created)
+    }
+
+    pub fn close(&self) -> api::Result<String> {
+        let mut env = self
+            .vm
+            .attach_current_thread_permanently()
+            .map_err(|error| format!("attaching to ART failed: {error}"))?;
+
+        let class = unsafe { JClass::from_raw(self.class.as_raw()) };
+        let closed = jni!(
+            env,
+            env.call_static_method(class, "close", "()Ljava/lang/String;", &[]),
+            "WryBridge.close"
+        )
+        .l()
+        .map_err(|error| format!("WryBridge.close returned nothing: {error}"))?;
+
+        read(&mut env, closed)
+    }
+
+    fn activity(&self, env: &mut jni::JNIEnv) -> api::Result<JObject> {
+        let thread = jni!(
+            env,
+            env.call_static_method(
+                "android/app/ActivityThread",
+                "currentActivityThread",
+                "()Landroid/app/ActivityThread;",
+                &[],
+            ),
+            "ActivityThread.currentActivityThread"
+        )
+        .l()
+        .map_err(|error| format!("ActivityThread.currentActivityThread returned nothing: {error}"))?;
+        if thread.is_null() {
+            return Err("ActivityThread.currentActivityThread returned null".into());
+        }
+
+        let activities = jni!(
+            env,
+            env.get_field(&thread, "mActivities", "Landroid/util/ArrayMap;"),
+            "ActivityThread.mActivities"
+        )
+        .l()
+        .map_err(|error| format!("ActivityThread.mActivities returned nothing: {error}"))?;
+        if activities.is_null() {
+            return Err("ActivityThread.mActivities returned null".into());
+        }
+
+        let size = jni!(env, env.call_method(&activities, "size", "()I", &[]), "ArrayMap.size")
+            .i()
+            .map_err(|error| format!("ArrayMap.size returned nothing: {error}"))?;
+        if size <= 0 {
+            return Err("no activity is running in this process".into());
+        }
+
+        let record = jni!(
+            env,
+            env.call_method(
+                &activities,
+                "valueAt",
+                "(I)Ljava/lang/Object;",
+                &[JValue::Int(0)],
+            ),
+            "ArrayMap.valueAt"
+        )
+        .l()
+        .map_err(|error| format!("ArrayMap.valueAt returned nothing: {error}"))?;
+
+        let activity = jni!(
+            env,
+            env.get_field(&record, "activity", "Landroid/app/Activity;"),
+            "ActivityClientRecord.activity"
+        )
+        .l()
+        .map_err(|error| format!("ActivityClientRecord.activity returned nothing: {error}"))?;
+        if activity.is_null() {
+            return Err("the first activity record has no activity".into());
+        }
+
+        Ok(activity)
     }
 }
 

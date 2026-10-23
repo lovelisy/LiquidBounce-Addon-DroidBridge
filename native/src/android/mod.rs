@@ -14,8 +14,8 @@ impl Engine {
         let vm = art::find()?;
         api::info("[Wry] found ART, loading the bridge");
         let bridge = bridge::Bridge::attach(vm, &options.data_dir)?;
-        api::info("[Wry] probing the web view on the main thread");
-        let report = bridge.probe()?;
+        api::info("[Wry] starting the bridge");
+        let report = bridge.start()?;
         api::info(format!("[Wry] {report}"));
         Ok(Self { bridge: Some(bridge), next: 1 })
     }
@@ -27,19 +27,28 @@ impl Engine {
     pub fn update(&mut self) {}
 
     pub fn create_browser(&mut self, options: BrowserOptions) -> api::Result<BrowserId> {
-        if self.bridge.is_none() {
-            return Err("the Android bridge is not running".into());
-        }
+        let bridge = self
+            .bridge
+            .as_ref()
+            .ok_or_else(|| "the Android bridge is not running".to_string())?;
         let id = self.next;
         self.next += 1;
         api::info(format!(
             "[Wry] browser {id} asked for {} ({}x{})",
             options.url, options.width, options.height
         ));
+        let report = bridge.create(&options.url)?;
+        api::info(format!("[Wry] {report}"));
         Ok(id)
     }
 
-    pub fn close_browser(&mut self, _id: BrowserId) {}
+    pub fn close_browser(&mut self, _id: BrowserId) {
+        if let Some(bridge) = self.bridge.as_ref() {
+            if let Err(error) = bridge.close() {
+                api::warn(format!("[Wry] closing the webview failed: {error}"));
+            }
+        }
+    }
 
     pub fn navigate(&mut self, _id: BrowserId, _url: String) {}
 
