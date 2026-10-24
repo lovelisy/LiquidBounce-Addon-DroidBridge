@@ -1,11 +1,12 @@
 mod art;
 mod bridge;
 
-use crate::api::{self, BrowserId, BrowserOptions, Frame, Key, Pointer, StartOptions};
+use crate::api::{self, BrowserId, BrowserOptions, Frame, Key, MouseButton, Pointer, StartOptions};
 
 pub struct Engine {
     bridge: Option<bridge::Bridge>,
     next: BrowserId,
+    viewport: (u32, u32),
 }
 
 impl Engine {
@@ -14,22 +15,27 @@ impl Engine {
         let bridge = bridge::Bridge::attach(vm, &options.data_dir)?;
         let report = bridge.start()?;
         api::info(format!("[Wry] {report}"));
-        Ok(Self { bridge: Some(bridge), next: 1 })
+        Ok(Self { bridge: Some(bridge), next: 1, viewport: (0, 0) })
     }
 
     pub fn stop(&mut self) {
-        self.bridge = None;
+        if let Some(bridge) = self.bridge.take() {
+            if let Err(error) = bridge.close() {
+                api::warn(format!("[Wry] closing the webview failed: {error}"));
+            }
+        }
     }
 
     pub fn update(&mut self) {}
 
     pub fn create_browser(&mut self, options: BrowserOptions) -> api::Result<BrowserId> {
+        let id = self.next;
+        self.next += 1;
+        self.viewport = (options.width, options.height);
         let bridge = self
             .bridge
             .as_ref()
             .ok_or_else(|| "the Android bridge is not running".to_string())?;
-        let id = self.next;
-        self.next += 1;
         let report = bridge.create(&options.url)?;
         api::info(format!("[Wry] {report}"));
         Ok(id)
@@ -59,17 +65,55 @@ impl Engine {
 
     pub fn go_forward(&mut self, _id: BrowserId) {}
 
-    pub fn resize(&mut self, _id: BrowserId, _width: u32, _height: u32, _zoom: f64) {}
+    pub fn resize(&mut self, _id: BrowserId, width: u32, height: u32, _zoom: f64) {
+        self.viewport = (width.max(1), height.max(1));
+    }
 
     pub fn set_fps(&mut self, _id: BrowserId, _fps: u32) {}
 
-    pub fn pointer(&mut self, _id: BrowserId, _x: f64, _y: f64, _pointer: Pointer) {}
+    pub fn pointer(&mut self, _id: BrowserId, x: f64, y: f64, pointer: Pointer) {
+        let Some(bridge) = self.bridge.as_ref() else {
+            return;
+        };
+        let (width, height) = self.viewport;
+        let nx = if width > 0 { x / f64::from(width) } else { 0.0 };
+        let ny = if height > 0 { y / f64::from(height) } else { 0.0 };
+        let (action, button, amount) = match pointer {
+            Pointer::Move => (0, 0, 0.0),
+            Pointer::Button(button, pressed) => {
+                let code = match button {
+                    MouseButton::Left => 1,
+                    MouseButton::Right => 2,
+                    MouseButton::Middle => 3,
+                };
+                (if pressed { 1 } else { 2 }, code, 0.0)
+            }
+            Pointer::Scroll(steps) => (3, 0, steps),
+        };
+        if let Err(error) = bridge.pointer(nx, ny, action, button, amount) {
+            api::warn(format!("[Wry] forwarding a pointer event failed: {error}"));
+        }
+    }
 
     pub fn focus(&mut self, _id: BrowserId) {}
 
-    pub fn key(&mut self, _id: BrowserId, _key: Key) {}
+    pub fn key(&mut self, _id: BrowserId, key: Key) {
+        let Some(bridge) = self.bridge.as_ref() else {
+            return;
+        };
+        if let Err(error) = bridge.key(key.pressed, key.keycode) {
+            api::warn(format!("[Wry] forwarding a key event failed: {error}"));
+        }
+    }
 
-    pub fn text(&mut self, _id: BrowserId, _text: String) {}
+    pub fn text(&mut self, _id: BrowserId, text: String) {
+        let Some(bridge) = self.bridge.as_ref() else {
+            return;
+        };
+        if let Err(error) = bridge.text(&text) {
+            api::warn(format!("[Wry] typing text failed: {error}"));
+        }
+    }
 
     pub fn take_frame(&mut self, _id: BrowserId) -> Option<Frame> {
         None
