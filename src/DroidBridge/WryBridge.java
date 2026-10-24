@@ -114,7 +114,29 @@ public final class WryBridge {
                     + "size:computed?computed.maskSize+'/'+computed.webkitMaskSize:'',"
                     + "bg:computed?computed.backgroundColor:'',"
                     + "rect:first?JSON.stringify(first.getBoundingClientRect()):'',"
-                    + "canvases:canvas.length,webgl2:gl};"
+                    + "canvases:canvas.length,webgl2:gl,"
+                    + "innerWidth:window.innerWidth,innerHeight:window.innerHeight,"
+                    + "outerWidth:window.outerWidth,outerHeight:window.outerHeight,"
+                    + "dpr:window.devicePixelRatio,"
+                    + "screenWidth:screen.width,screenHeight:screen.height,"
+                    + "screenAvail:screen.availWidth+'x'+screen.availHeight,"
+                    + "visual:window.visualViewport?(visualViewport.width+'x'+visualViewport.height+'@'+visualViewport.scale):'none',"
+                    + "docClient:document.documentElement.clientWidth+'x'+document.documentElement.clientHeight,"
+                    + "bodyScroll:document.body.scrollWidth+'x'+document.body.scrollHeight,"
+                    + "scrollbar:bodyscrollbar(),"
+                    + "panels:document.getElementsByClassName('panel').length,"
+                    + "expanded:document.getElementsByClassName('modules expanded').length,"
+                    + "scrollable:scrollables()};"
+                    + "function bodyscrollbar(){return 'w'+Math.max(0,window.innerWidth-document.documentElement.clientWidth);}"
+                    + "function scrollables(){"
+                    + "var out=[];"
+                    + "var all=document.querySelectorAll('*');"
+                    + "for(var i=0;i<all.length&&out.length<4;i++){"
+                    + "var el=all[i];"
+                    + "var st=getComputedStyle(el);"
+                    + "if((st.overflowY==='auto'||st.overflowY==='scroll')&&el.scrollHeight>el.clientHeight+1){"
+                    + "out.push((el.className||el.tagName)+':'+el.clientHeight+'/'+el.scrollHeight+'@'+el.scrollTop);}}"
+                    + "return out.join('|');}"
                     + "})())";
 
     /**
@@ -498,7 +520,6 @@ public final class WryBridge {
         if (action == 1) {
             page.pressed = true;
             page.pressedButton = button;
-            page.hovers = 0;
             dom(page, view, x, y, "down", button);
             return;
         }
@@ -521,14 +542,7 @@ public final class WryBridge {
     }
 
     private static void hover(Page page, OverlayWebView view, float x, float y) {
-        boolean accepted = mouse(view, MotionEvent.ACTION_HOVER_MOVE, x, y);
-        if (page.hovers > 3) {
-            return;
-        }
-        page.hovers++;
-        log("pointer browser " + page.id + " hover accepted " + accepted
-                + " at " + (x * view.getWidth()) + "," + (y * view.getHeight())
-                + " size " + view.getWidth() + "x" + view.getHeight());
+        mouse(view, MotionEvent.ACTION_HOVER_MOVE, x, y);
     }
 
     /**
@@ -566,7 +580,13 @@ public final class WryBridge {
                 + "root.scrollTop=was+dy;"
                 + "moved='root '+was+'->'+root.scrollTop;"
                 + "}else{window.scrollBy(0,dy);moved='window';}}"
-                + "return moved;";
+                + "var chain=[];"
+                + "var p=document.elementFromPoint(bx,by);"
+                + "while(p&&p!==document.documentElement){"
+                + "var s2=getComputedStyle(p);"
+                + "chain.push((p.className||p.tagName)+'[ov'+s2.overflowY+' '+p.clientHeight+'/'+p.scrollHeight+']');"
+                + "p=p.parentElement;}"
+                + "return (moved||'nothing')+' | hit '+chain.slice(0,4).join(' < ');";
         view.evaluateJavascript("(function(){" + body + "})()", new ValueCallback<String>() {
             @Override
             public void onReceiveValue(String value) {
@@ -870,7 +890,6 @@ public final class WryBridge {
         volatile boolean wanted;
         boolean pressed;
         int pressedButton;
-        int hovers;
         float pendingX;
         float pendingY;
         boolean hoverPosted;
