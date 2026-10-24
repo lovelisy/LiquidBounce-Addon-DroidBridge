@@ -38,13 +38,19 @@ public final class WryBridge {
         }
     }
 
-    public static String[] pollLogs() {
+    public static String drainLogs() {
         if (LOGS.isEmpty()) {
-            return new String[0];
+            return "";
         }
-        String[] drained = LOGS.toArray(new String[0]);
+        StringBuilder text = new StringBuilder();
+        for (String line : LOGS) {
+            if (text.length() > 0) {
+                text.append('\n');
+            }
+            text.append(line);
+        }
         LOGS.clear();
-        return drained;
+        return text.toString();
     }
 
     private WryBridge() {

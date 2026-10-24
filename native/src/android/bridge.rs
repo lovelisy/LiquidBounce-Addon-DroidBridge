@@ -326,29 +326,19 @@ impl Bridge {
             .map_err(|error| format!("attaching to ART failed: {error}"))?;
 
         let class = unsafe { JClass::from_raw(self.class.as_raw()) };
-        let array = jni!(
+        let drained = jni!(
             env,
-            env.call_static_method(class, "pollLogs", "()[Ljava/lang/String;", &[]),
-            "WryBridge.pollLogs"
+            env.call_static_method(class, "drainLogs", "()Ljava/lang/String;", &[]),
+            "WryBridge.drainLogs"
         )
         .l()
-        .map_err(|error| format!("WryBridge.pollLogs returned nothing: {error}"))?;
+        .map_err(|error| format!("WryBridge.drainLogs returned nothing: {error}"))?;
 
-        let array = jni::objects::JObjectArray::from(array);
-        let length = env
-            .get_array_length(&array)
-            .map_err(|error| format!("reading the log count failed: {error}"))?;
-        let mut lines = Vec::with_capacity(length as usize);
-        for index in 0..length {
-            let element = env
-                .get_object_array_element(&array, index)
-                .map_err(|error| format!("reading a log line failed: {error}"))?;
-            let text = env
-                .get_string(&JString::from(element))
-                .map_err(|error| format!("decoding a log line failed: {error}"))?;
-            lines.push(text.into());
+        let text = read(&mut env, drained)?;
+        if text.is_empty() {
+            return Ok(Vec::new());
         }
-        Ok(lines)
+        Ok(text.split('\n').map(str::to_string).collect())
     }
 
     fn activity<'a>(&self, mut env: &mut jni::JNIEnv<'a>) -> api::Result<JObject<'a>> {
