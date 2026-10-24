@@ -1,5 +1,6 @@
 package liquidbounce.DroidBridge;
 
+import android.webkit.CookieManager;
 import android.webkit.WebResourceResponse;
 
 import java.io.ByteArrayInputStream;
@@ -7,6 +8,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -46,6 +48,7 @@ final class WryWindow {
             Map<String, String> headers = new HashMap<>();
             headers.put("Content-Type", "text/html");
             headers.put("Cache-Control", "no-store");
+            keepCookie(connection, url, headers);
             return new WebResourceResponse("text/html", "utf-8", HttpURLConnection.HTTP_OK,
                     "OK", headers, new ByteArrayInputStream(data));
         } catch (Throwable error) {
@@ -72,6 +75,38 @@ final class WryWindow {
         return html.substring(0, end + 1)
                 + "<script>" + WryScripts.PATCH + "</script>"
                 + html.substring(end + 1);
+    }
+
+    /**
+     * The theme authorises the page with a cookie that the server sets on the document request. The
+     * cookie is read here and handed to the web view, once through the response and once through the
+     * cookie manager, because a web view that rereads a page on its own must still send it on every
+     * later request for the assets.
+     */
+    private static void keepCookie(HttpURLConnection connection, String url, Map<String, String> headers) {
+        try {
+            String cookie = firstCookie(connection);
+            if (cookie == null) {
+                return;
+            }
+            headers.put("Set-Cookie", cookie);
+            CookieManager manager = CookieManager.getInstance();
+            manager.setCookie(url, cookie);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static String firstCookie(HttpURLConnection connection) {
+        for (Map.Entry<String, List<String>> entry : connection.getHeaderFields().entrySet()) {
+            if (entry.getKey() == null || !entry.getKey().equalsIgnoreCase("Set-Cookie")) {
+                continue;
+            }
+            List<String> values = entry.getValue();
+            if (values != null && !values.isEmpty()) {
+                return values.get(0);
+            }
+        }
+        return null;
     }
 
     private static String read(InputStream stream) throws Exception {
