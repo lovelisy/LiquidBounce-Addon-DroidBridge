@@ -649,15 +649,14 @@ public final class WryBridge {
             super(context);
         }
 
-        void inject(MotionEvent event) {
+        boolean inject(MotionEvent event) {
             injecting = true;
             try {
                 int action = event.getActionMasked();
                 if (action == MotionEvent.ACTION_HOVER_MOVE || action == MotionEvent.ACTION_SCROLL) {
-                    dispatchGenericMotionEvent(event);
-                } else {
-                    dispatchTouchEvent(event);
+                    return dispatchGenericMotionEvent(event);
                 }
+                return dispatchTouchEvent(event);
             } finally {
                 injecting = false;
             }
