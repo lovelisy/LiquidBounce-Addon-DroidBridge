@@ -97,7 +97,7 @@ public final class WryBridge {
                         entry.loaded = true;
                     }
                     target.evaluateJavascript(
-                            "(function(){"
+                            "JSON.stringify((function(){"
                                     + "var d=document.createElement('div');"
                                     + "d.style.maskImage='url(x)';"
                                     + "var webkit=d.style.webkitMaskImage;"
@@ -108,12 +108,12 @@ public final class WryBridge {
                                     + "try{gl=!!document.createElement('canvas').getContext('webgl2');}catch(e){gl='error';}"
                                     + "var icons=document.getElementsByClassName('title-button-icon');"
                                     + "var sample=icons.length?getComputedStyle(icons[0]).maskImage:'';"
-                                    + "return JSON.stringify({ua:navigator.userAgent,"
+                                    + "return {ua:navigator.userAgent,"
                                     + "mask:d.style.maskImage,webkitMask:webkit,"
                                     + "webkitApplied:d.style.webkitMaskImage,"
                                     + "computed:sample,"
-                                    + "icons:icons.length,canvases:canvas.length,webgl2:gl});"
-                                    + "})()",
+                                    + "icons:icons.length,canvases:canvas.length,webgl2:gl};"
+                                    + "})())",
                             value -> log("page probe " + value));
                 }
 
@@ -332,14 +332,8 @@ public final class WryBridge {
         long eventDownTime = touch ? page.downTime : now;
         int bit = buttonState(button);
         int buttonState = 0;
-        int actionButton = 0;
-        if (type == MotionEvent.ACTION_DOWN) {
+        if (type == MotionEvent.ACTION_DOWN || type == MotionEvent.ACTION_MOVE) {
             buttonState = bit;
-            actionButton = bit;
-        } else if (type == MotionEvent.ACTION_MOVE) {
-            buttonState = bit;
-        } else if (type == MotionEvent.ACTION_UP) {
-            actionButton = bit;
         }
         MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
         properties.id = 0;
@@ -355,14 +349,13 @@ public final class WryBridge {
                 new MotionEvent.PointerCoords[]{coords},
                 0, buttonState, 1.0f, 1.0f, 0, 0,
                 InputDevice.SOURCE_MOUSE, 0);
-        event.setActionButton(actionButton);
         if (!view.isFocused()) {
             view.requestFocus();
         }
         view.inject(event);
         event.recycle();
         log("pointer browser " + page.id + " " + typeName(type) + " at " + sx + "," + sy
-                + " button " + button + " actionButton " + actionButton
+                + " button " + button + " state " + buttonState
                 + " focused " + view.isFocused()
                 + " visible " + (view.getVisibility() == View.VISIBLE)
                 + " size " + view.getWidth() + "x" + view.getHeight());
