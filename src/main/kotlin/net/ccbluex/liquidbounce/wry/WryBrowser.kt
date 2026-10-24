@@ -13,6 +13,8 @@ import net.ccbluex.liquidbounce.integration.backend.input.InputListener
 import net.ccbluex.liquidbounce.integration.screen.ScreenManager
 import net.ccbluex.liquidbounce.utils.client.mc
 import org.apache.logging.log4j.LogManager
+import org.joml.component1
+import org.joml.component2
 
 /**
  * A browser of the Android backend, a web view the system draws on top of the game.
