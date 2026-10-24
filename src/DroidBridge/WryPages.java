@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -103,6 +104,7 @@ final class WryPages {
             view.setFocusableInTouchMode(true);
             view.setOnFocusChangeListener(null);
             view.setOnClickListener(null);
+            keepAuthCookie(url);
             view.loadUrl(url);
             long took = (System.nanoTime() - begin) / 1_000_000L;
             ViewGroup parent = (ViewGroup) view.getParent();
@@ -116,6 +118,48 @@ final class WryPages {
             WryStack.put(new WryPage(id, null));
             return "browser " + id + " failed: " + error;
         }
+    }
+
+    /**
+     * The theme authorises itself with a cookie that the server sets when it first answers with the
+     * auth code in the query string. The fetch calls that toggle a module and the socket that reports
+     * the change both carry that cookie, so it is read from the url and given to the web view before
+     * the page loads, which keeps a web view that drops the server cookie from failing those calls.
+     */
+    private static void keepAuthCookie(String url) {
+        try {
+            String code = query(url, "lb_code");
+            if (code == null || code.isEmpty()) {
+                return;
+            }
+            CookieManager.getInstance().setCookie(url, "lb_auth=" + code + "; path=/");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static String query(String url, String name) {
+        if (url == null) {
+            return null;
+        }
+        int mark = url.indexOf('?');
+        int end = url.indexOf('#');
+        if (end < 0) {
+            end = url.length();
+        }
+        if (mark < 0 || mark >= end) {
+            return null;
+        }
+        String query = url.substring(mark + 1, end);
+        for (String pair : query.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq < 0) {
+                continue;
+            }
+            if (name.equals(pair.substring(0, eq))) {
+                return pair.substring(eq + 1);
+            }
+        }
+        return null;
     }
 
     static void remove(long id) {

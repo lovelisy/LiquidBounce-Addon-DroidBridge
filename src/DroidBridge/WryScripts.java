@@ -99,6 +99,12 @@ final class WryScripts {
     private static final float MIN_FIT = 0.2f;
 
     /**
+     * The hud asks for scaleFactor*50%, which is 100% when the game reports a factor of two, and the
+     * fit is applied to that.
+     */
+    private static final float HUD_FIT = 1f;
+
+    /**
      * The height the menu needs at zoom 1, taken from the media queries of the theme: they pick .8
      * for a window of 900, so the content is 900/.8 = 1125 tall in css pixels.
      */
@@ -116,17 +122,17 @@ final class WryScripts {
      * The routine therefore stays in the page and is called again whenever the hash changes.
      *
      * Only the chrome that has no setting of its own is sized here. The panels and the global
-     * settings already scale themselves by the factor the game reports, and the hud does the same,
-     * so those are left alone: the panels follow the Scale setting of the ClickGUI module and the
-     * hud keeps its native size, which keeps their coordinates in step with the size they are drawn
-     * at. The buttons above the panels and the drawer of the hud editor are drawn at a fixed css
-     * size instead, so they are the ones brought down to the width of a phone.
+     * settings already scale themselves by the factor the game reports, so those are left to the
+     * Scale setting of the ClickGUI module. The buttons above the panels, the search box, the drawer
+     * of the hud editor and the hud itself are drawn at a fixed css size instead, so those are the
+     * ones brought down to the width of a phone.
      */
     static final String SCALE =
             "(function(){"
                     + "var W=" + DESKTOP_WIDTH + ";"
                     + "var H=" + DESKTOP_HEIGHT + ";"
                     + "var MIN=" + MIN_FIT + ";"
+                    + "var HUD=" + HUD_FIT + ";"
                     + "var MH=" + MENU_HEIGHT + ";"
                     + "var MF=" + MENU_FIT + ";"
                     + "function fit(){"
@@ -143,8 +149,20 @@ final class WryScripts {
                     + "function clickgui(f){"
                     + "var css='';"
                     + "css+='.available-tabs.svelte-8tpz8n{zoom:'+f+';}';"
+                    + "css+='.search{zoom:'+f+';}';"
                     + "css+='.component-drawer{zoom:'+f+';}';"
                     + "return {css:css,log:'clickgui chrome '+f};"
+                    + "}"
+                    + "function hud(f){"
+                    + "var z=2;"
+                    + "var el=document.querySelector('.hud');"
+                    + "if(el&&el.style&&el.style.zoom){"
+                    + "var got=ratio(el.style.zoom);"
+                    + "if(got){z=got;}"
+                    + "}"
+                    + "var want=z*f*HUD;"
+                    + "return {css:'.hud{zoom:'+want.toFixed(3)+'!important;}',"
+                    + "log:'hud '+z+'x'+f.toFixed(3)+'='+want.toFixed(3)};"
                     + "}"
                     + "function menu(){"
                     + "var base=window.__wryMenuBase;"
@@ -166,8 +184,7 @@ final class WryScripts {
                     + "var f=fit();"
                     + "var result;"
                     + "if(route.indexOf('/clickgui')>=0){result=clickgui(f);}"
-                    + "else if(route.indexOf('/hud')>=0||route.indexOf('/inventory')>=0){"
-                    + "result={css:'',log:'hud native'};}"
+                    + "else if(route.indexOf('/hud')>=0||route.indexOf('/inventory')>=0){result=hud(f);}"
                     + "else{result=menu();}"
                     + "var style=document.getElementById('wry-scale');"
                     + "if(!style){style=document.createElement('style');style.id='wry-scale';"
