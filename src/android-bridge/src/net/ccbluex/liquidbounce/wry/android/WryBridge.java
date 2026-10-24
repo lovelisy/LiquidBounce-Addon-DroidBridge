@@ -11,6 +11,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -135,7 +136,7 @@ public final class WryBridge {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT);
             activity.addContentView(view, params);
-            place(view);
+            String stacking = place(view);
             view.setVisibility(View.INVISIBLE);
             view.setFocusable(true);
             view.setFocusableInTouchMode(true);
@@ -148,6 +149,7 @@ public final class WryBridge {
                     + ", provider " + WebView.getCurrentWebViewPackage()
                     + ", parent " + (parent == null ? "none" : parent.getClass().getName())
                     + ", order " + (parent == null ? -1 : parent.indexOfChild(view)) + " of " + (parent == null ? -1 : parent.getChildCount())
+                    + ", stacking " + stacking
                     + ", url " + url;
         } catch (Throwable error) {
             PAGES.put(id, new Page(id, null));
@@ -157,32 +159,91 @@ public final class WryBridge {
 
     /**
      * Keeps the page below the launcher's own overlays (cursor, buttons, menu) by stacking it right above
-     * the game surface instead of on top of everything.
+     * the game surface. The surface lives deep inside the Compose tree, so the whole tree is searched and
+     * the page is inserted into the same container, right after it.
      */
-    private static void place(View view) {
-        ViewGroup parent = (ViewGroup) view.getParent();
-        if (parent == null) {
-            return;
+    private static String place(View view) {
+        ViewParent parent = view.getParent();
+        if (!(parent instanceof ViewGroup)) {
+            return "not attached";
         }
-        int surface = -1;
-        for (int index = 0; index < parent.getChildCount(); index++) {
-            String name = parent.getChildAt(index).getClass().getName();
-            if (name.contains("TextureView") || name.contains("SurfaceView")) {
-                surface = index;
-                break;
+        View surface = findSurface((ViewGroup) parent, view);
+        if (surface == null) {
+            return "no game surface, kept in " + parent.getClass().getName();
+        }
+        ViewParent surfaceParent = surface.getParent();
+        if (!(surfaceParent instanceof ViewGroup)) {
+            return "surface has no container";
+        }
+        ViewGroup holder = (ViewGroup) surfaceParent;
+        int wanted = holder.indexOfChild(surface) + 1;
+        if (holder == parent) {
+            if (holder.indexOfChild(view) == wanted) {
+                return "already above the surface";
             }
-        }
-        if (surface < 0) {
-            return;
-        }
-        int current = parent.indexOfChild(view);
-        if (current == surface + 1) {
-            return;
+        } else {
+            ((ViewGroup) parent).removeView(view);
         }
         ViewGroup.LayoutParams params = view.getLayoutParams();
-        parent.removeView(view);
-        int target = Math.min(surface + 1, parent.getChildCount());
-        parent.addView(view, target, params);
+        holder.removeView(view);
+        holder.addView(view, Math.min(wanted, holder.getChildCount()), params);
+        fit(holder, view);
+        return "stacked at " + holder.indexOfChild(view) + " of " + holder.getChildCount()
+                + " in " + holder.getClass().getName();
+    }
+
+    private static View findSurface(ViewGroup group, View skip) {
+        for (int index = 0; index < group.getChildCount(); index++) {
+            View child = group.getChildAt(index);
+            if (child == skip) {
+                continue;
+            }
+            String name = child.getClass().getName();
+            if (name.contains("TextureView") || name.contains("SurfaceView")) {
+                return child;
+            }
+            if (child instanceof ViewGroup) {
+                View found = findSurface((ViewGroup) child, skip);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Compose only lays out the views it knows about, so the page has to size itself after whatever
+     * container it ends up in.
+     */
+    private static void fit(final ViewGroup holder, final View view) {
+        if (view.getTag() == holder) {
+            return;
+        }
+        view.setTag(holder);
+        holder.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View target, int left, int top, int right, int bottom,
+                                       int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                if (view.getParent() == holder) {
+                    resize(view, right - left, bottom - top);
+                }
+            }
+        });
+        resize(view, holder.getWidth(), holder.getHeight());
+    }
+
+    private static void resize(View view, int width, int height) {
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+        if (view.getWidth() == width && view.getHeight() == height) {
+            return;
+        }
+        view.measure(
+                View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+        view.layout(0, 0, width, height);
     }
 
     public static boolean loaded(final long id) {
@@ -200,7 +261,10 @@ public final class WryBridge {
                 }
                 page.view.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
                 if (visible) {
-                    place(page.view);
+                    String stacking = place(page.view);
+                    if (!"already above the surface".equals(stacking)) {
+                        log("restacked browser " + id + ": " + stacking);
+                    }
                     page.view.requestFocus();
                 }
             }
