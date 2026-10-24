@@ -13,6 +13,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.webkit.WebView;
+import android.webkit.ValueCallback;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
@@ -114,7 +115,12 @@ public final class WryBridge {
                                     + "computed:sample,"
                                     + "icons:icons.length,canvases:canvas.length,webgl2:gl};"
                                     + "})())",
-                            value -> log("page probe " + value));
+                            new ValueCallback<String>() {
+                                @Override
+                                public void onReceiveValue(String value) {
+                                    log("page probe " + value);
+                                }
+                            });
                 }
 
                 @Override
