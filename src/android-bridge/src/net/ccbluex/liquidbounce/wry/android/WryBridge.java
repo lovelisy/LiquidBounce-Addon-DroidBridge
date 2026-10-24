@@ -136,13 +136,20 @@ public final class WryBridge {
                         || type == MotionEvent.ACTION_UP;
                 long eventDownTime = touch ? downTime : now;
                 int buttonState = touch ? buttonState(button) : 0;
-                MotionEvent event = MotionEvent.obtain(eventDownTime, now, type, sx, sy, 0);
-                event.setSource(InputDevice.SOURCE_MOUSE);
-                event.setToolType(0, MotionEvent.TOOL_TYPE_MOUSE);
-                event.setButtonState(buttonState);
+                MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
+                properties.id = 0;
+                properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
+                MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
+                coords.x = sx;
+                coords.y = sy;
                 if (type == MotionEvent.ACTION_SCROLL) {
-                    event.setAxisValue(MotionEvent.AXIS_VSCROLL, -amount);
+                    coords.setAxisValue(MotionEvent.AXIS_VSCROLL, -amount);
                 }
+                MotionEvent event = MotionEvent.obtain(eventDownTime, now, type, 1,
+                        new MotionEvent.PointerProperties[]{properties},
+                        new MotionEvent.PointerCoords[]{coords},
+                        0, buttonState, 1.0f, 1.0f, 0, 0,
+                        InputDevice.SOURCE_MOUSE, 0);
                 view.inject(event);
                 event.recycle();
             }
