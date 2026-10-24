@@ -137,6 +137,8 @@ impl Engine {
         self.compositor.send(Command::Fps { browser: id, fps });
     }
 
+    pub fn set_visible(&mut self, _id: BrowserId, _visible: bool) {}
+
     pub fn pointer(&mut self, id: BrowserId, x: f64, y: f64, pointer: Pointer) {
         self.compositor.send(Command::Pointer { browser: id, x, y, pointer });
     }

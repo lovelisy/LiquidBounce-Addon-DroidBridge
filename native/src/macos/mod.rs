@@ -136,6 +136,8 @@ impl Engine {
         }
     }
 
+    pub fn set_visible(&mut self, _id: BrowserId, _visible: bool) {}
+
     pub fn pointer(&mut self, id: BrowserId, x: f64, y: f64, pointer: Pointer) {
         if let Some(browser) = self.browser(id) {
             browser.pointer(x, y, pointer);

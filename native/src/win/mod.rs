@@ -188,6 +188,8 @@ impl Engine {
         self.with_browser(id, move |browser, _| browser.set_fps(fps));
     }
 
+    pub fn set_visible(&mut self, _id: BrowserId, _visible: bool) {}
+
     pub fn pointer(&mut self, id: BrowserId, x: f64, y: f64, pointer: Pointer) {
         self.with_browser(id, move |browser, _| browser.pointer(x, y, pointer));
     }
