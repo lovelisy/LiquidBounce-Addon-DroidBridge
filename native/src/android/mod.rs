@@ -118,8 +118,6 @@ impl Engine {
         }
     }
 
-    pub fn set_fps(&mut self, _id: BrowserId, _fps: u32) {}
-
     pub fn pointer(&mut self, id: BrowserId, x: f64, y: f64, pointer: Pointer) {
         let Some(bridge) = self.bridge.as_ref() else {
             return;
@@ -174,9 +172,5 @@ impl Engine {
         if let Err(error) = bridge.enter(id as i64) {
             api::warn(format!("[Wry] forwarding enter failed: {error}"));
         }
-    }
-
-    pub fn take_frame(&mut self, _id: BrowserId) -> Option<()> {
-        None
     }
 }

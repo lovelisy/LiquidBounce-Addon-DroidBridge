@@ -85,15 +85,12 @@ pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_update(mut env: J
 
 #[no_mangle]
 pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_createBrowser(mut env: JNIEnv, _: JClass, url: JString,
-    width: jint, height: jint, zoom: jdouble, incognito: jboolean, fps: jint) -> jlong {
+    width: jint, height: jint, _zoom: jdouble, _incognito: jboolean, _fps: jint) -> jlong {
     with_engine(&mut env, |engine, env| {
         let options = api::BrowserOptions {
             url: string(env, &url)?,
             width: width.max(1) as u32,
             height: height.max(1) as u32,
-            zoom,
-            incognito: incognito != 0,
-            fps: fps.max(1) as u32,
         };
         engine.create_browser(options).map(|id| id as jlong)
     })
@@ -125,8 +122,6 @@ browser_call!(Java_liquidbounce_DroidBridge_WryNative_goBack() => |engine, env, 
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_goForward() => |engine, env, id| engine.go_forward(id));
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_resize(width: jint, height: jint, zoom: jdouble) =>
     |engine, env, id| engine.resize(id, width.max(1) as u32, height.max(1) as u32, zoom));
-browser_call!(Java_liquidbounce_DroidBridge_WryNative_setFps(fps: jint) => |engine, env, id|
-    engine.set_fps(id, fps.max(1) as u32));
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_mouseMove(x: jdouble, y: jdouble) => |engine, env, id|
     engine.pointer(id, x, y, Pointer::Move));
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_mouseButton(x: jdouble, y: jdouble, button: jint,
@@ -179,13 +174,3 @@ pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_pollEvents(mut en
     })
 }
 
-/// The page is drawn by the system web view straight onto the game surface, so there is never a frame to hand out.
-#[no_mangle]
-pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_takeFrame(mut env: JNIEnv, _: JClass, id: jlong,
-    out: JLongArray) -> jint {
-    with_engine(&mut env, |engine, env| {
-        let _ = engine.take_frame(id as api::BrowserId);
-        let _ = env.set_long_array_region(&out, 0, &[0i64; 32]);
-        Ok(0)
-    })
-}

@@ -107,9 +107,6 @@ internal object WryNative {
     external fun resize(id: Long, width: Int, height: Int, zoom: Double)
 
     @JvmStatic
-    external fun setFps(id: Long, fps: Int)
-
-    @JvmStatic
     external fun mouseMove(id: Long, x: Double, y: Double)
 
     /**
@@ -141,12 +138,6 @@ internal object WryNative {
 
     @JvmStatic
     external fun pollEvents(): Array<WryEvent>?
-
-    /**
-     * The page is drawn by the system web view onto the game surface, so there is never a frame to take.
-     */
-    @JvmStatic
-    external fun takeFrame(id: Long, out: LongArray): Int
 
 }
 

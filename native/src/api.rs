@@ -16,10 +16,6 @@ pub struct BrowserOptions {
     /// The size the page is laid out for.
     pub width: u32,
     pub height: u32,
-    /// Page zoom, so the layout stays the same at a lower texture size.
-    pub zoom: f64,
-    pub incognito: bool,
-    pub fps: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
