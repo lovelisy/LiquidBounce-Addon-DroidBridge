@@ -15,27 +15,23 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public final class WryBridge {
 
-    private static Application application;
+    private static final Map<Long, Page> PAGES = new ConcurrentHashMap<>();
+
     private static Handler main;
-    private static OverlayWebView webView;
     private static String dataSuffix;
-    private static long downTime;
-    private static volatile boolean pressed;
-    private static volatile float pendingX;
-    private static volatile float pendingY;
-    private static volatile boolean hoverPosted;
-    private static volatile boolean loaded;
 
     private WryBridge() {
     }
 
     public static String start(Application app, String suffix) {
-        application = app;
         main = new Handler(Looper.getMainLooper());
         if (suffix != null && !suffix.isEmpty() && dataSuffix == null) {
             try {
@@ -50,26 +46,25 @@ public final class WryBridge {
                 + ", web data " + (dataSuffix == null ? "default" : dataSuffix);
     }
 
-    public static String create(final Activity activity, final String url) {
+    public static String create(final Activity activity, final long id, final String url) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            return add(activity, url);
+            return add(activity, id, url);
         }
         final String[] outcome = new String[1];
         final CountDownLatch latch = new CountDownLatch(1);
         main.post(new Runnable() {
             @Override
             public void run() {
-                outcome[0] = add(activity, url);
+                outcome[0] = add(activity, id, url);
                 latch.countDown();
             }
         });
         return await(latch, outcome);
     }
 
-    private static String add(Activity activity, String url) {
+    private static String add(Activity activity, long id, String url) {
         try {
-            detach();
-            loaded = false;
+            remove(id);
             long begin = System.nanoTime();
             OverlayWebView view = new OverlayWebView(activity);
             view.setBackgroundColor(0x00000000);
@@ -79,7 +74,10 @@ public final class WryBridge {
             view.setWebViewClient(new WebViewClient() {
                 @Override
                 public void onPageFinished(WebView target, String page) {
-                    loaded = true;
+                    Page entry = PAGES.get(id);
+                    if (entry != null) {
+                        entry.loaded = true;
+                    }
                 }
             });
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
@@ -89,67 +87,79 @@ public final class WryBridge {
             view.bringToFront();
             view.setVisibility(View.INVISIBLE);
             view.setFocusableInTouchMode(false);
+            PAGES.put(id, new Page(view));
             view.loadUrl(url);
-            webView = view;
             long took = (System.nanoTime() - begin) / 1_000_000L;
             ViewGroup parent = (ViewGroup) view.getParent();
-            return "webview added in " + took + " ms on " + Thread.currentThread().getName()
+            return "browser " + id + " added in " + took + " ms on " + Thread.currentThread().getName()
                     + ", provider " + WebView.getCurrentWebViewPackage()
                     + ", parent " + (parent == null ? "none" : parent.getClass().getName())
                     + ", url " + url;
         } catch (Throwable error) {
-            return "webview failed: " + error;
+            PAGES.put(id, new Page(null));
+            return "browser " + id + " failed: " + error;
         }
     }
 
-    public static String setVisible(final boolean visible) {
+    public static boolean loaded(final long id) {
+        Page page = PAGES.get(id);
+        return page != null && (page.loaded || page.view == null);
+    }
+
+    public static String setVisible(final long id, final boolean visible) {
         main.post(new Runnable() {
             @Override
             public void run() {
-                OverlayWebView view = webView;
-                if (view == null) {
+                Page page = PAGES.get(id);
+                if (page == null || page.view == null) {
                     return;
                 }
-                view.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+                page.view.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
                 if (visible) {
-                    view.bringToFront();
-                    view.requestFocus();
+                    page.view.bringToFront();
+                    page.view.requestFocus();
                 }
             }
         });
-        return "visibility " + visible;
+        return "browser " + id + " visibility " + visible;
     }
 
-    public static void pointer(final float x, final float y, final int action, final int button, final float amount) {
-        if (action == 0 && !pressed) {
-            pendingX = x;
-            pendingY = y;
-            if (!hoverPosted) {
-                hoverPosted = true;
-                main.post(HOVER);
-            }
-            return;
-        }
+    public static void pointer(final long id, final float x, final float y, final int action,
+                               final int button, final float amount) {
         main.post(new Runnable() {
             @Override
             public void run() {
-                apply(x, y, action, button, amount);
+                Page page = PAGES.get(id);
+                if (page == null || page.view == null) {
+                    return;
+                }
+                if (action == 0 && !page.pressed) {
+                    page.pendingX = x;
+                    page.pendingY = y;
+                    if (!page.hoverPosted) {
+                        page.hoverPosted = true;
+                        main.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                Page current = PAGES.get(id);
+                                if (current == null || current.view == null) {
+                                    return;
+                                }
+                                current.hoverPosted = false;
+                                apply(current, current.pendingX, current.pendingY, 0, 0, 0f);
+                            }
+                        });
+                    }
+                    return;
+                }
+                apply(page, x, y, action, button, amount);
             }
         });
     }
 
-    private static final Runnable HOVER = new Runnable() {
-        @Override
-        public void run() {
-            hoverPosted = false;
-            apply(pendingX, pendingY, 0, 0, 0f);
-        }
-    };
-
-    private static void apply(float x, float y, int action, int button, float amount) {
-        OverlayWebView view = webView;
-        if (view == null || view.getVisibility() != View.VISIBLE
-                || view.getWidth() <= 0 || view.getHeight() <= 0) {
+    private static void apply(Page page, float x, float y, int action, int button, float amount) {
+        OverlayWebView view = page.view;
+        if (view.getVisibility() != View.VISIBLE || view.getWidth() <= 0 || view.getHeight() <= 0) {
             return;
         }
         float sx = x * view.getWidth();
@@ -157,21 +167,21 @@ public final class WryBridge {
         long now = SystemClock.uptimeMillis();
         int type;
         if (action == 1) {
-            pressed = true;
-            downTime = now;
+            page.pressed = true;
+            page.downTime = now;
             type = MotionEvent.ACTION_DOWN;
         } else if (action == 2) {
-            pressed = false;
+            page.pressed = false;
             type = MotionEvent.ACTION_UP;
         } else if (action == 3) {
             type = MotionEvent.ACTION_SCROLL;
         } else {
-            type = pressed ? MotionEvent.ACTION_MOVE : MotionEvent.ACTION_HOVER_MOVE;
+            type = page.pressed ? MotionEvent.ACTION_MOVE : MotionEvent.ACTION_HOVER_MOVE;
         }
         boolean touch = type == MotionEvent.ACTION_DOWN
                 || type == MotionEvent.ACTION_MOVE
                 || type == MotionEvent.ACTION_UP;
-        long eventDownTime = touch ? downTime : now;
+        long eventDownTime = touch ? page.downTime : now;
         int buttonState = touch ? buttonState(button) : 0;
         MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
         properties.id = 0;
@@ -188,36 +198,31 @@ public final class WryBridge {
                 0, buttonState, 1.0f, 1.0f, 0, 0,
                 InputDevice.SOURCE_MOUSE, 0);
         view.inject(event);
-        event.recycle();
     }
 
-    public static void key(final int keycode, final boolean pressed) {
+    public static void key(final long id, final int keycode, final boolean pressed) {
         main.post(new Runnable() {
             @Override
             public void run() {
-                OverlayWebView view = webView;
-                if (view == null || view.getVisibility() != View.VISIBLE) {
+                Page page = PAGES.get(id);
+                if (page == null || page.view == null || page.view.getVisibility() != View.VISIBLE) {
                     return;
                 }
                 int code = keycode(keycode);
                 if (code == 0) {
                     return;
                 }
-                view.dispatchKeyEvent(new KeyEvent(
+                page.view.dispatchKeyEvent(new KeyEvent(
                         pressed ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP,
                         code));
             }
         });
     }
 
-    public static boolean loaded() {
-        return loaded;
-    }
-
-    public static String close() {
+    public static String close(final long id) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            detach();
-            return "webview closed";
+            remove(id);
+            return "browser " + id + " closed";
         }
         final String[] outcome = new String[1];
         final CountDownLatch latch = new CountDownLatch(1);
@@ -225,16 +230,57 @@ public final class WryBridge {
             @Override
             public void run() {
                 try {
-                    detach();
-                    outcome[0] = "webview closed";
+                    remove(id);
+                    outcome[0] = "browser " + id + " closed";
                 } catch (Throwable error) {
-                    outcome[0] = "closing the webview failed: " + error;
+                    outcome[0] = "closing browser " + id + " failed: " + error;
                 } finally {
                     latch.countDown();
                 }
             }
         });
         return await(latch, outcome);
+    }
+
+    public static String closeAll() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            removeAll();
+            return "all browsers closed";
+        }
+        final String[] outcome = new String[1];
+        final CountDownLatch latch = new CountDownLatch(1);
+        main.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    removeAll();
+                    outcome[0] = "all browsers closed";
+                } catch (Throwable error) {
+                    outcome[0] = "closing the browsers failed: " + error;
+                } finally {
+                    latch.countDown();
+                }
+            }
+        });
+        return await(latch, outcome);
+    }
+
+    private static void remove(long id) {
+        Page page = PAGES.remove(id);
+        if (page == null || page.view == null) {
+            return;
+        }
+        ViewGroup parent = (ViewGroup) page.view.getParent();
+        if (parent != null) {
+            parent.removeView(page.view);
+        }
+        page.view.destroy();
+    }
+
+    private static void removeAll() {
+        for (Long id : new ArrayList<>(PAGES.keySet())) {
+            remove(id);
+        }
     }
 
     private static int buttonState(int button) {
@@ -268,22 +314,6 @@ public final class WryBridge {
         }
     }
 
-    private static void detach() {
-        OverlayWebView view = webView;
-        webView = null;
-        pressed = false;
-        hoverPosted = false;
-        loaded = false;
-        if (view == null) {
-            return;
-        }
-        ViewGroup parent = (ViewGroup) view.getParent();
-        if (parent != null) {
-            parent.removeView(view);
-        }
-        view.destroy();
-    }
-
     private static String await(CountDownLatch latch, String[] outcome) {
         try {
             if (!latch.await(20, TimeUnit.SECONDS)) {
@@ -294,6 +324,21 @@ public final class WryBridge {
             return "interrupted while waiting: " + error;
         }
         return outcome[0];
+    }
+
+    private static final class Page {
+
+        final OverlayWebView view;
+        volatile boolean loaded;
+        boolean pressed;
+        long downTime;
+        float pendingX;
+        float pendingY;
+        boolean hoverPosted;
+
+        Page(OverlayWebView view) {
+            this.view = view;
+        }
     }
 
     private static final class OverlayWebView extends WebView {

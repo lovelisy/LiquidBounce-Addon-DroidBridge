@@ -163,7 +163,7 @@ impl Bridge {
         read(&mut env, started)
     }
 
-    pub fn create(&self, url: &str) -> api::Result<String> {
+    pub fn create(&self, id: i64, url: &str) -> api::Result<String> {
         let mut env = self
             .vm
             .attach_current_thread_permanently()
@@ -177,9 +177,10 @@ impl Bridge {
             env.call_static_method(
                 class,
                 "create",
-                "(Landroid/app/Activity;Ljava/lang/String;)Ljava/lang/String;",
+                "(Landroid/app/Activity;JLjava/lang/String;)Ljava/lang/String;",
                 &[
                     JValue::Object(&activity),
+                    JValue::Long(id),
                     JValue::Object(&JObject::from(url)),
                 ],
             ),
@@ -191,7 +192,7 @@ impl Bridge {
         read(&mut env, created)
     }
 
-    pub fn close(&self) -> api::Result<String> {
+    pub fn close(&self, id: i64) -> api::Result<String> {
         let mut env = self
             .vm
             .attach_current_thread_permanently()
@@ -200,7 +201,7 @@ impl Bridge {
         let class = unsafe { JClass::from_raw(self.class.as_raw()) };
         let closed = jni!(
             env,
-            env.call_static_method(class, "close", "()Ljava/lang/String;", &[]),
+            env.call_static_method(class, "close", "(J)Ljava/lang/String;", &[JValue::Long(id)]),
             "WryBridge.close"
         )
         .l()
@@ -209,7 +210,25 @@ impl Bridge {
         read(&mut env, closed)
     }
 
-    pub fn set_visible(&self, visible: bool) -> api::Result<String> {
+    pub fn close_all(&self) -> api::Result<String> {
+        let mut env = self
+            .vm
+            .attach_current_thread_permanently()
+            .map_err(|error| format!("attaching to ART failed: {error}"))?;
+
+        let class = unsafe { JClass::from_raw(self.class.as_raw()) };
+        let closed = jni!(
+            env,
+            env.call_static_method(class, "closeAll", "()Ljava/lang/String;", &[]),
+            "WryBridge.closeAll"
+        )
+        .l()
+        .map_err(|error| format!("WryBridge.closeAll returned nothing: {error}"))?;
+
+        read(&mut env, closed)
+    }
+
+    pub fn set_visible(&self, id: i64, visible: bool) -> api::Result<String> {
         let mut env = self
             .vm
             .attach_current_thread_permanently()
@@ -221,8 +240,8 @@ impl Bridge {
             env.call_static_method(
                 class,
                 "setVisible",
-                "(Z)Ljava/lang/String;",
-                &[JValue::Bool(visible as u8)],
+                "(JZ)Ljava/lang/String;",
+                &[JValue::Long(id), JValue::Bool(visible as u8)],
             ),
             "WryBridge.setVisible"
         )
@@ -232,7 +251,8 @@ impl Bridge {
         read(&mut env, report)
     }
 
-    pub fn pointer(&self, nx: f64, ny: f64, action: i32, button: i32, amount: f64) -> api::Result<()> {
+    pub fn pointer(&self, id: i64, nx: f64, ny: f64, action: i32, button: i32, amount: f64)
+        -> api::Result<()> {
         let mut env = self
             .vm
             .attach_current_thread_permanently()
@@ -244,8 +264,9 @@ impl Bridge {
             env.call_static_method(
                 class,
                 "pointer",
-                "(FFIIF)V",
+                "(JFFIIF)V",
                 &[
+                    JValue::Long(id),
                     JValue::Float(nx as f32),
                     JValue::Float(ny as f32),
                     JValue::Int(action),
@@ -259,7 +280,7 @@ impl Bridge {
         Ok(())
     }
 
-    pub fn key(&self, pressed: bool, keycode: i32) -> api::Result<()> {
+    pub fn key(&self, id: i64, pressed: bool, keycode: i32) -> api::Result<()> {
         let mut env = self
             .vm
             .attach_current_thread_permanently()
@@ -271,8 +292,8 @@ impl Bridge {
             env.call_static_method(
                 class,
                 "key",
-                "(IZ)V",
-                &[JValue::Int(keycode), JValue::Bool(pressed as u8)],
+                "(JIZ)V",
+                &[JValue::Long(id), JValue::Int(keycode), JValue::Bool(pressed as u8)],
             ),
             "WryBridge.key"
         );
@@ -280,7 +301,7 @@ impl Bridge {
         Ok(())
     }
 
-    pub fn loaded(&self) -> api::Result<bool> {
+    pub fn loaded(&self, id: i64) -> api::Result<bool> {
         let mut env = self
             .vm
             .attach_current_thread_permanently()
@@ -289,7 +310,7 @@ impl Bridge {
         let class = unsafe { JClass::from_raw(self.class.as_raw()) };
         let value = jni!(
             env,
-            env.call_static_method(class, "loaded", "()Z", &[]),
+            env.call_static_method(class, "loaded", "(J)Z", &[JValue::Long(id)]),
             "WryBridge.loaded"
         )
         .z()

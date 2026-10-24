@@ -2,14 +2,18 @@ mod art;
 mod bridge;
 
 use crate::api::{self, BrowserId, BrowserOptions, Frame, Key, MouseButton, Pointer, StartOptions};
+use std::collections::HashMap;
+
+struct Page {
+    viewport: (u32, u32),
+    url: String,
+    announced: bool,
+}
 
 pub struct Engine {
     bridge: Option<bridge::Bridge>,
     next: BrowserId,
-    viewport: (u32, u32),
-    browser: BrowserId,
-    url: String,
-    announced: bool,
+    pages: HashMap<BrowserId, Page>,
 }
 
 impl Engine {
@@ -18,64 +22,66 @@ impl Engine {
         let bridge = bridge::Bridge::attach(vm, &options.data_dir)?;
         let report = bridge.start()?;
         api::info(format!("[Wry] {report}"));
-        Ok(Self {
-            bridge: Some(bridge),
-            next: 1,
-            viewport: (0, 0),
-            browser: 0,
-            url: String::new(),
-            announced: true,
-        })
+        Ok(Self { bridge: Some(bridge), next: 1, pages: HashMap::new() })
     }
 
     pub fn stop(&mut self) {
+        self.pages.clear();
         if let Some(bridge) = self.bridge.take() {
-            if let Err(error) = bridge.close() {
-                api::warn(format!("[Wry] closing the webview failed: {error}"));
+            if let Err(error) = bridge.close_all() {
+                api::warn(format!("[Wry] closing the web views failed: {error}"));
             }
         }
     }
 
     pub fn update(&mut self) {
-        if self.announced {
-            return;
-        }
-        let loaded = match self.bridge.as_ref() {
-            Some(bridge) => bridge.loaded(),
+        let bridge = match self.bridge.as_ref() {
+            Some(bridge) => bridge,
             None => return,
         };
-        match loaded {
-            Ok(true) => {
-                self.announced = true;
-                api::push_event(self.browser, api::EventKind::Loaded, 200, self.url.clone(), "");
+        for (id, page) in self.pages.iter_mut() {
+            if page.announced {
+                continue;
             }
-            Ok(false) => {}
-            Err(error) => api::warn(format!("[Wry] checking the page state failed: {error}")),
+            match bridge.loaded(*id as i64) {
+                Ok(true) => {
+                    page.announced = true;
+                    api::push_event(*id, api::EventKind::Loaded, 200, page.url.clone(), "");
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    page.announced = true;
+                    api::warn(format!("[Wry] checking the page state failed: {error}"));
+                }
+            }
         }
     }
 
     pub fn create_browser(&mut self, options: BrowserOptions) -> api::Result<BrowserId> {
         let id = self.next;
         self.next += 1;
-        self.viewport = (options.width, options.height);
-        self.browser = id;
-        self.url = options.url.clone();
-        self.announced = false;
         let bridge = self
             .bridge
             .as_ref()
             .ok_or_else(|| "the Android bridge is not running".to_string())?;
-        let report = bridge.create(&options.url)?;
-        api::info(format!("[Wry] browser {id} asked for {} ({}x{})", options.url, options.width, options.height));
+        api::info(format!(
+            "[Wry] browser {id} asked for {} ({}x{})",
+            options.url, options.width, options.height
+        ));
+        let report = bridge.create(id as i64, &options.url)?;
         api::info(format!("[Wry] {report}"));
+        self.pages.insert(
+            id,
+            Page { viewport: (options.width.max(1), options.height.max(1)), url: options.url, announced: false },
+        );
         Ok(id)
     }
 
-    pub fn close_browser(&mut self, _id: BrowserId) {
-        self.announced = true;
+    pub fn close_browser(&mut self, id: BrowserId) {
+        self.pages.remove(&id);
         if let Some(bridge) = self.bridge.as_ref() {
-            if let Err(error) = bridge.close() {
-                api::warn(format!("[Wry] closing the webview failed: {error}"));
+            if let Err(error) = bridge.close(id as i64) {
+                api::warn(format!("[Wry] closing the web view failed: {error}"));
             }
         }
     }
@@ -85,8 +91,8 @@ impl Engine {
         let Some(bridge) = self.bridge.as_ref() else {
             return;
         };
-        if let Err(error) = bridge.set_visible(visible) {
-            api::warn(format!("[Wry] setting the webview visibility failed: {error}"));
+        if let Err(error) = bridge.set_visible(id as i64, visible) {
+            api::warn(format!("[Wry] setting the web view visibility failed: {error}"));
         }
     }
 
@@ -98,17 +104,22 @@ impl Engine {
 
     pub fn go_forward(&mut self, _id: BrowserId) {}
 
-    pub fn resize(&mut self, _id: BrowserId, width: u32, height: u32, _zoom: f64) {
-        self.viewport = (width.max(1), height.max(1));
+    pub fn resize(&mut self, id: BrowserId, width: u32, height: u32, _zoom: f64) {
+        if let Some(page) = self.pages.get_mut(&id) {
+            page.viewport = (width.max(1), height.max(1));
+        }
     }
 
     pub fn set_fps(&mut self, _id: BrowserId, _fps: u32) {}
 
-    pub fn pointer(&mut self, _id: BrowserId, x: f64, y: f64, pointer: Pointer) {
+    pub fn pointer(&mut self, id: BrowserId, x: f64, y: f64, pointer: Pointer) {
         let Some(bridge) = self.bridge.as_ref() else {
             return;
         };
-        let (width, height) = self.viewport;
+        let (width, height) = match self.pages.get(&id) {
+            Some(page) => page.viewport,
+            None => return,
+        };
         let nx = if width > 0 { x / f64::from(width) } else { 0.0 };
         let ny = if height > 0 { y / f64::from(height) } else { 0.0 };
         let (action, button, amount) = match pointer {
@@ -123,18 +134,18 @@ impl Engine {
             }
             Pointer::Scroll(steps) => (3, 0, steps),
         };
-        if let Err(error) = bridge.pointer(nx, ny, action, button, amount) {
+        if let Err(error) = bridge.pointer(id as i64, nx, ny, action, button, amount) {
             api::warn(format!("[Wry] forwarding a pointer event failed: {error}"));
         }
     }
 
     pub fn focus(&mut self, _id: BrowserId) {}
 
-    pub fn key(&mut self, _id: BrowserId, key: Key) {
+    pub fn key(&mut self, id: BrowserId, key: Key) {
         let Some(bridge) = self.bridge.as_ref() else {
             return;
         };
-        if let Err(error) = bridge.key(key.pressed, key.keycode) {
+        if let Err(error) = bridge.key(id as i64, key.pressed, key.keycode) {
             api::warn(format!("[Wry] forwarding a key event failed: {error}"));
         }
     }
