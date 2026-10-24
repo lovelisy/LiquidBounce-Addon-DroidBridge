@@ -7,8 +7,6 @@ import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -63,14 +61,6 @@ final class WryPages {
             view.getSettings().setSupportZoom(false);
             view.setWebViewClient(new WebViewClient() {
                 @Override
-                public WebResourceResponse shouldInterceptRequest(WebView target, WebResourceRequest request) {
-                    if (request.isForMainFrame()) {
-                        return WryWindow.rewrite(request.getUrl().toString());
-                    }
-                    return null;
-                }
-
-                @Override
                 public void onPageFinished(WebView target, String page) {
                     WryPage entry = WryStack.page(id);
                     if (entry != null) {
@@ -79,6 +69,7 @@ final class WryPages {
                     }
                     target.evaluateJavascript(WryScripts.DISPATCH_SETUP, null);
                     target.evaluateJavascript(WryScripts.MASKS, null);
+                    target.evaluateJavascript(WryScripts.SCALE, null);
                     target.evaluateJavascript(WryScripts.FONTS, null);
                     WryStack.awaitVisualState(target);
                 }

@@ -81,61 +81,106 @@ final class WryScripts {
                     + "})()";
 
     /**
-     * The theme lays every route out from one dial: the scale factor the game reports in the window
-     * api. The click gui draws itself with `scale(factor*50%)` inside a box of `2/factor` screens,
-     * the hud draws itself with `zoom(factor*50%)`, a click is turned into the space of the client
-     * with the same factor and a panel is held inside that space by the same factor again.
+     * The width and the height the theme was drawn for, which is a desktop window.
      *
-     * The theme was written for a client that runs with a gui scale of one, so the factor the game
-     * reports - two on a phone - makes an expanded panel taller than the screen can show and clamps
-     * it to the top, so it cannot be moved, and makes the hud sit somewhere it does not belong. The
-     * factor is therefore rewritten to the one the theme was drawn for before the page reads it.
-     *
-     * The rewrite happens inside the page rather than in the bridge, because the viewport and the
-     * route are only known there: the hud keeps its current size with one factor and the screens
-     * with another, and the two are told apart by the hash. The fetch of the theme is patched before
-     * the app boots, so every reader of the window api - the click gui store, the hud, the editor -
-     * gets the rewritten value.
-     *
-     * The screens are scaled by `2*fit`, which is the size of the window of the client against the
-     * size the theme was drawn for: 40% on a phone, the reported factor on a desktop. The hud is
-     * scaled by `4*fit`, which keeps its size: 80% on a phone, and the reported factor on a desktop
-     * because it is capped there.
+     * The theme writes its sizes in css pixels: the menu pads itself by 50, the drawer of the hud
+     * editor is 600 wide, the text of the buttons at the top of the click gui is 14 tall. A phone
+     * hands the page a viewport of 805x360, so those same numbers take up two and a half times the
+     * share of the screen that they take on a desktop, and the whole page looks zoomed in. Sizing
+     * the page from the viewport instead is what brings it back to the size of a desktop.
      */
-    static final String PATCH =
+    private static final int DESKTOP_WIDTH = 1600;
+
+    private static final int DESKTOP_HEIGHT = 900;
+
+    /**
+     * The narrowest the page is allowed to become, so that a small screen stays readable.
+     */
+    private static final float MIN_FIT = 0.2f;
+
+    /**
+     * The height the menu needs at zoom 1, taken from the media queries of the theme: they pick .8
+     * for a window of 900, so the content is 900/.8 = 1125 tall in css pixels.
+     */
+    private static final int MENU_HEIGHT = 1125;
+
+    /**
+     * The theme sizes the menu by the width alone, so a narrow screen gets a zoom that is too large
+     * for its height and the bottom bar falls below the screen. The zoom is therefore capped by what
+     * the height can hold, while a window that is tall enough keeps the value of the theme.
+     */
+    private static final float MENU_FIT = 0.2f;
+
+    /**
+     * The theme is a single page app, so the route changes without the page being loaded again.
+     * The routine therefore stays in the page and is called again whenever the hash changes.
+     *
+     * Only the chrome that has no setting of its own is sized here. The panels and the global
+     * settings already scale themselves by the factor the game reports, and the hud does the same,
+     * so those are left alone: the panels follow the Scale setting of the ClickGUI module and the
+     * hud keeps its native size, which keeps their coordinates in step with the size they are drawn
+     * at. The buttons above the panels and the drawer of the hud editor are drawn at a fixed css
+     * size instead, so they are the ones brought down to the width of a phone.
+     */
+    static final String SCALE =
             "(function(){"
-                    + "if(window.__wryScalePatch){return 'already';}"
-                    + "window.__wryScalePatch=true;"
-                    + "var W=1600,H=900;"
+                    + "var W=" + DESKTOP_WIDTH + ";"
+                    + "var H=" + DESKTOP_HEIGHT + ";"
+                    + "var MIN=" + MIN_FIT + ";"
+                    + "var MH=" + MENU_HEIGHT + ";"
+                    + "var MF=" + MENU_FIT + ";"
                     + "function fit(){"
                     + "var w=window.innerWidth||W;"
-                    + "var h=window.innerHeight||H;"
-                    + "var f=Math.min(w/W,h/H);"
+                    + "var f=w/W;"
                     + "if(!isFinite(f)||f<=0){return 1;}"
-                    + "return Math.min(1,Math.max(0.2,f));"
+                    + "return Math.min(1,Math.max(MIN,f));"
                     + "}"
-                    + "function factor(){"
-                    + "var f=fit();"
+                    + "function ratio(raw){"
+                    + "var v=parseFloat(raw);"
+                    + "if(!isFinite(v)||v<=0){return 0;}"
+                    + "return raw.indexOf('%')>=0?v/100:v;"
+                    + "}"
+                    + "function clickgui(f){"
+                    + "var css='';"
+                    + "css+='.available-tabs.svelte-8tpz8n{zoom:'+f+';}';"
+                    + "css+='.component-drawer{zoom:'+f+';}';"
+                    + "return {css:css,log:'clickgui chrome '+f};"
+                    + "}"
+                    + "function menu(){"
+                    + "var base=window.__wryMenuBase;"
+                    + "if(!base){"
+                    + "var me=document.querySelector('.menu');"
+                    + "var read=me?ratio(getComputedStyle(me).zoom):0;"
+                    + "if(read){base=read;window.__wryMenuBase=base;}"
+                    + "else{return {css:'',log:'menu pending'};}"
+                    + "}"
+                    + "var h=window.innerHeight||H;"
+                    + "var room=h/MH;"
+                    + "var want=Math.min(base,Math.max(MF,room));"
+                    + "if(want>=base){return {css:'',log:'menu '+base+' fits'};}"
+                    + "return {css:'.menu{zoom:'+want.toFixed(3)+'!important;}',"
+                    + "log:'menu '+base+'->'+want.toFixed(3)};"
+                    + "}"
+                    + "window.__wryScale=function(){"
                     + "var route=location.hash||'';"
-                    + "if(route.indexOf('/hud')>=0||route.indexOf('/inventory')>=0){"
-                    + "return Math.min(2,4*f);"
-                    + "}"
-                    + "return 2*f;"
-                    + "}"
-                    + "if(window.Response&&window.Response.prototype&&window.Response.prototype.json){"
-                    + "var realJson=window.Response.prototype.json;"
-                    + "window.Response.prototype.json=function(){"
-                    + "var u=(this&&this.url)||'';"
-                    + "var isWindow=u.indexOf('/api/v1/client/window')>=0;"
-                    + "return realJson.call(this).then(function(json){"
-                    + "if(isWindow&&json&&typeof json==='object'&&!Array.isArray(json)){"
-                    + "json.scaleFactor=factor();"
-                    + "}"
-                    + "return json;"
-                    + "});"
+                    + "var f=fit();"
+                    + "var result;"
+                    + "if(route.indexOf('/clickgui')>=0){result=clickgui(f);}"
+                    + "else if(route.indexOf('/hud')>=0||route.indexOf('/inventory')>=0){"
+                    + "result={css:'',log:'hud native'};}"
+                    + "else{result=menu();}"
+                    + "var style=document.getElementById('wry-scale');"
+                    + "if(!style){style=document.createElement('style');style.id='wry-scale';"
+                    + "document.head.appendChild(style);}"
+                    + "style.textContent=result.css;"
+                    + "return route+' '+result.log;"
                     + "};"
+                    + "if(!window.__wryScaleHooked){"
+                    + "window.__wryScaleHooked=true;"
+                    + "window.addEventListener('hashchange',function(){window.__wryScale();});"
+                    + "window.addEventListener('resize',function(){window.__wryScale();});"
                     + "}"
-                    + "return 'patched';"
+                    + "return window.__wryScale();"
                     + "})()";
 
     /**
