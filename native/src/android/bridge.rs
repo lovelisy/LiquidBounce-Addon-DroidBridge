@@ -280,28 +280,6 @@ impl Bridge {
         Ok(())
     }
 
-    pub fn text(&self, value: &str) -> api::Result<()> {
-        let mut env = self
-            .vm
-            .attach_current_thread_permanently()
-            .map_err(|error| format!("attaching to ART failed: {error}"))?;
-
-        let text = jni!(env, env.new_string(value), "creating the typed text");
-        let class = unsafe { JClass::from_raw(self.class.as_raw()) };
-        jni!(
-            env,
-            env.call_static_method(
-                class,
-                "text",
-                "(Ljava/lang/String;)V",
-                &[JValue::Object(&JObject::from(text))],
-            ),
-            "WryBridge.text"
-        );
-
-        Ok(())
-    }
-
     fn activity<'a>(&self, mut env: &mut jni::JNIEnv<'a>) -> api::Result<JObject<'a>> {
         let thread = jni!(
             env,

@@ -106,14 +106,7 @@ impl Engine {
         }
     }
 
-    pub fn text(&mut self, _id: BrowserId, text: String) {
-        let Some(bridge) = self.bridge.as_ref() else {
-            return;
-        };
-        if let Err(error) = bridge.text(&text) {
-            api::warn(format!("[Wry] typing text failed: {error}"));
-        }
-    }
+    pub fn text(&mut self, _id: BrowserId, _text: String) {}
 
     pub fn take_frame(&mut self, _id: BrowserId) -> Option<Frame> {
         None

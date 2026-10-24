@@ -7,7 +7,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.InputDevice;
-import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -26,8 +25,10 @@ public final class WryBridge {
     private static OverlayWebView webView;
     private static String dataSuffix;
     private static long downTime;
-    private static boolean pressed;
-    private static KeyCharacterMap characters;
+    private static volatile boolean pressed;
+    private static volatile float pendingX;
+    private static volatile float pendingY;
+    private static volatile boolean hoverPosted;
 
     private WryBridge() {
     }
@@ -107,53 +108,74 @@ public final class WryBridge {
     }
 
     public static void pointer(final float x, final float y, final int action, final int button, final float amount) {
+        if (action == 0 && !pressed) {
+            pendingX = x;
+            pendingY = y;
+            if (!hoverPosted) {
+                hoverPosted = true;
+                main.post(HOVER);
+            }
+            return;
+        }
         main.post(new Runnable() {
             @Override
             public void run() {
-                OverlayWebView view = webView;
-                if (view == null || view.getVisibility() != View.VISIBLE
-                        || view.getWidth() <= 0 || view.getHeight() <= 0) {
-                    return;
-                }
-                float sx = x * view.getWidth();
-                float sy = y * view.getHeight();
-                long now = SystemClock.uptimeMillis();
-                int type;
-                if (action == 1) {
-                    pressed = true;
-                    downTime = now;
-                    type = MotionEvent.ACTION_DOWN;
-                } else if (action == 2) {
-                    pressed = false;
-                    type = MotionEvent.ACTION_UP;
-                } else if (action == 3) {
-                    type = MotionEvent.ACTION_SCROLL;
-                } else {
-                    type = pressed ? MotionEvent.ACTION_MOVE : MotionEvent.ACTION_HOVER_MOVE;
-                }
-                boolean touch = type == MotionEvent.ACTION_DOWN
-                        || type == MotionEvent.ACTION_MOVE
-                        || type == MotionEvent.ACTION_UP;
-                long eventDownTime = touch ? downTime : now;
-                int buttonState = touch ? buttonState(button) : 0;
-                MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
-                properties.id = 0;
-                properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
-                MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
-                coords.x = sx;
-                coords.y = sy;
-                if (type == MotionEvent.ACTION_SCROLL) {
-                    coords.setAxisValue(MotionEvent.AXIS_VSCROLL, -amount);
-                }
-                MotionEvent event = MotionEvent.obtain(eventDownTime, now, type, 1,
-                        new MotionEvent.PointerProperties[]{properties},
-                        new MotionEvent.PointerCoords[]{coords},
-                        0, buttonState, 1.0f, 1.0f, 0, 0,
-                        InputDevice.SOURCE_MOUSE, 0);
-                view.inject(event);
-                event.recycle();
+                apply(x, y, action, button, amount);
             }
         });
+    }
+
+    private static final Runnable HOVER = new Runnable() {
+        @Override
+        public void run() {
+            hoverPosted = false;
+            apply(pendingX, pendingY, 0, 0, 0f);
+        }
+    };
+
+    private static void apply(float x, float y, int action, int button, float amount) {
+        OverlayWebView view = webView;
+        if (view == null || view.getVisibility() != View.VISIBLE
+                || view.getWidth() <= 0 || view.getHeight() <= 0) {
+            return;
+        }
+        float sx = x * view.getWidth();
+        float sy = y * view.getHeight();
+        long now = SystemClock.uptimeMillis();
+        int type;
+        if (action == 1) {
+            pressed = true;
+            downTime = now;
+            type = MotionEvent.ACTION_DOWN;
+        } else if (action == 2) {
+            pressed = false;
+            type = MotionEvent.ACTION_UP;
+        } else if (action == 3) {
+            type = MotionEvent.ACTION_SCROLL;
+        } else {
+            type = pressed ? MotionEvent.ACTION_MOVE : MotionEvent.ACTION_HOVER_MOVE;
+        }
+        boolean touch = type == MotionEvent.ACTION_DOWN
+                || type == MotionEvent.ACTION_MOVE
+                || type == MotionEvent.ACTION_UP;
+        long eventDownTime = touch ? downTime : now;
+        int buttonState = touch ? buttonState(button) : 0;
+        MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
+        properties.id = 0;
+        properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
+        MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
+        coords.x = sx;
+        coords.y = sy;
+        if (type == MotionEvent.ACTION_SCROLL) {
+            coords.setAxisValue(MotionEvent.AXIS_VSCROLL, -amount);
+        }
+        MotionEvent event = MotionEvent.obtain(eventDownTime, now, type, 1,
+                new MotionEvent.PointerProperties[]{properties},
+                new MotionEvent.PointerCoords[]{coords},
+                0, buttonState, 1.0f, 1.0f, 0, 0,
+                InputDevice.SOURCE_MOUSE, 0);
+        view.inject(event);
+        event.recycle();
     }
 
     public static void key(final int keycode, final boolean pressed) {
@@ -171,33 +193,6 @@ public final class WryBridge {
                 view.dispatchKeyEvent(new KeyEvent(
                         pressed ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP,
                         code));
-            }
-        });
-    }
-
-    public static void text(final String value) {
-        if (value == null || value.isEmpty()) {
-            return;
-        }
-        main.post(new Runnable() {
-            @Override
-            public void run() {
-                OverlayWebView view = webView;
-                if (view == null || view.getVisibility() != View.VISIBLE) {
-                    return;
-                }
-                if (characters == null) {
-                    characters = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD);
-                }
-                for (int index = 0; index < value.length(); index++) {
-                    KeyEvent[] events = characters.getEvents(new char[]{value.charAt(index)});
-                    if (events == null) {
-                        continue;
-                    }
-                    for (KeyEvent event : events) {
-                        view.dispatchKeyEvent(event);
-                    }
-                }
             }
         });
     }
@@ -236,25 +231,9 @@ public final class WryBridge {
     }
 
     private static int keycode(int glfw) {
-        if (glfw >= 'A' && glfw <= 'Z') {
-            return KeyEvent.KEYCODE_A + (glfw - 'A');
-        }
-        if (glfw >= '0' && glfw <= '9') {
-            return KeyEvent.KEYCODE_0 + (glfw - '0');
-        }
         switch (glfw) {
-            case 32:
-                return KeyEvent.KEYCODE_SPACE;
             case 256:
                 return KeyEvent.KEYCODE_ESCAPE;
-            case 257:
-                return KeyEvent.KEYCODE_ENTER;
-            case 258:
-                return KeyEvent.KEYCODE_TAB;
-            case 259:
-                return KeyEvent.KEYCODE_DEL;
-            case 261:
-                return KeyEvent.KEYCODE_FORWARD_DEL;
             case 262:
                 return KeyEvent.KEYCODE_DPAD_RIGHT;
             case 263:
@@ -264,31 +243,9 @@ public final class WryBridge {
             case 265:
                 return KeyEvent.KEYCODE_DPAD_UP;
             case 266:
-                return KeyEvent.KEYCODE_MOVE_HOME;
-            case 267:
-                return KeyEvent.KEYCODE_MOVE_END;
-            case 268:
                 return KeyEvent.KEYCODE_PAGE_UP;
-            case 269:
+            case 267:
                 return KeyEvent.KEYCODE_PAGE_DOWN;
-            case 280:
-                return KeyEvent.KEYCODE_CAPS_LOCK;
-            case 340:
-                return KeyEvent.KEYCODE_SHIFT_LEFT;
-            case 341:
-                return KeyEvent.KEYCODE_CTRL_LEFT;
-            case 342:
-                return KeyEvent.KEYCODE_ALT_LEFT;
-            case 343:
-                return KeyEvent.KEYCODE_META_LEFT;
-            case 344:
-                return KeyEvent.KEYCODE_SHIFT_RIGHT;
-            case 345:
-                return KeyEvent.KEYCODE_CTRL_RIGHT;
-            case 346:
-                return KeyEvent.KEYCODE_ALT_RIGHT;
-            case 347:
-                return KeyEvent.KEYCODE_META_RIGHT;
             default:
                 return 0;
         }
@@ -298,6 +255,7 @@ public final class WryBridge {
         OverlayWebView view = webView;
         webView = null;
         pressed = false;
+        hoverPosted = false;
         if (view == null) {
             return;
         }
