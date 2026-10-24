@@ -145,8 +145,6 @@ impl Engine {
         }
     }
 
-    pub fn focus(&mut self, _id: BrowserId) {}
-
     pub fn key(&mut self, id: BrowserId, key: Key) {
         let Some(bridge) = self.bridge.as_ref() else {
             return;

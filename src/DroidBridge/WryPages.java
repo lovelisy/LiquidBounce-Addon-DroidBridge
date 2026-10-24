@@ -6,7 +6,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
-import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -70,18 +69,8 @@ final class WryPages {
                     }
                     target.evaluateJavascript(WryScripts.DISPATCH_SETUP, null);
                     target.evaluateJavascript(WryScripts.MASKS, null);
-                    target.evaluateJavascript(WryScripts.SCALE, new ValueCallback<String>() {
-                        @Override
-                        public void onReceiveValue(String value) {
-                            WryLog.log("scale " + value);
-                        }
-                    });
-                    target.evaluateJavascript(WryScripts.FONTS, new ValueCallback<String>() {
-                        @Override
-                        public void onReceiveValue(String value) {
-                            WryLog.log("fonts " + value);
-                        }
-                    });
+                    target.evaluateJavascript(WryScripts.SCALE, null);
+                    target.evaluateJavascript(WryScripts.FONTS, null);
                     WryStack.awaitVisualState(target);
                 }
 
@@ -89,18 +78,13 @@ final class WryPages {
                 public void onPageCommitVisible(WebView target, String page) {
                     WryStack.awaitVisualState(target);
                 }
-
-                @Override
-                public boolean shouldOverrideUrlLoading(WebView target, android.webkit.WebResourceRequest request) {
-                    return false;
-                }
             });
             view.setWebChromeClient(new WebChromeClient() {
                 @Override
                 public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
-                    if (message.messageLevel() != android.webkit.ConsoleMessage.MessageLevel.LOG) {
-                        WryLog.log("console " + message.messageLevel() + " " + message.message()
-                                + " @" + message.sourceId() + ":" + message.lineNumber());
+                    if (message.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR) {
+                        WryLog.log("console " + message.message() + " @" + message.sourceId()
+                                + ":" + message.lineNumber());
                     }
                     return true;
                 }

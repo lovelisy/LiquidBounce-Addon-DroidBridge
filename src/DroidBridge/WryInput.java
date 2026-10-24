@@ -3,7 +3,6 @@ package liquidbounce.DroidBridge;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.MotionEvent;
-import android.webkit.ValueCallback;
 
 /**
  * Turns the input of the game into events for a page.
@@ -23,9 +22,30 @@ final class WryInput {
     /**
      * The keys the bridge handles itself, everything else goes to the input method of the system.
      */
-    private static final int EDIT = -1;
+    private static final int EDIT_BACK = -1;
 
-    private static final int ENTER = -2;
+    private static final int EDIT_DELETE = -2;
+
+    private static final int ENTER = -3;
+
+    /**
+     * The game reports GLFW keycodes, but the launcher forwards the character code instead: a
+     * backspace arrives as 8 and a letter as the code of the letter, with the SDL scancode next to
+     * it. Both spellings are listed here, whichever one a launcher uses.
+     */
+    private static final int KEY_GLFW_ENTER = 257;
+
+    private static final int KEY_GLFW_BACKSPACE = 259;
+
+    private static final int KEY_GLFW_DELETE = 261;
+
+    private static final int KEY_ASCII_ENTER = 13;
+
+    private static final int KEY_ASCII_LINEFEED = 10;
+
+    private static final int KEY_ASCII_BACKSPACE = 8;
+
+    private static final int KEY_ASCII_DELETE = 127;
 
     static void pointer(WryPage page, float x, float y, int action, int button, float amount) {
         WryView view = page.view;
@@ -71,7 +91,7 @@ final class WryInput {
             enter(page);
             return;
         }
-        edit(page, true);
+        edit(page, code == EDIT_BACK);
     }
 
     static void text(WryPage page, String value) {
@@ -82,46 +102,34 @@ final class WryInput {
             return;
         }
         if ("\b".equals(value)) {
-            WryLog.log("text browser " + page.id + " backspace via char");
             edit(page, true);
             return;
         }
         String quoted = "'" + value.replace("\\", "\\\\").replace("'", "\\'")
                 .replace("\n", "\\n").replace("\r", "\\r") + "'";
-        page.view.evaluateJavascript("(function(text){" + WryScripts.INSERT + "})(" + quoted + ")",
-                new ValueCallback<String>() {
-                    @Override
-                    public void onReceiveValue(String result) {
-                        WryLog.log("text browser " + page.id + " '" + value + "' -> " + result);
-                    }
-                });
+        page.view.evaluateJavascript("(function(text){" + WryScripts.INSERT + "})(" + quoted + ")", null);
     }
 
     static void enter(WryPage page) {
-        page.view.evaluateJavascript("(function(){" + WryScripts.ENTER + "})()", new ValueCallback<String>() {
-            @Override
-            public void onReceiveValue(String value) {
-                WryLog.log("enter browser " + page.id + " -> " + value);
-            }
-        });
+        page.view.evaluateJavascript("(function(){" + WryScripts.ENTER + "})()", null);
     }
 
-    static void edit(final WryPage page, boolean backspace) {
-        page.view.evaluateJavascript("(function(){" + WryScripts.edit(backspace) + "})()",
-                new ValueCallback<String>() {
-                    @Override
-                    public void onReceiveValue(String value) {
-                        WryLog.log("edit browser " + page.id + " backspace " + value);
-                    }
-                });
+    static void edit(final WryPage page, final boolean backspace) {
+        page.view.evaluateJavascript("(function(){" + WryScripts.edit(backspace) + "})()", null);
     }
 
-    private static int keycode(int glfw) {
-        switch (glfw) {
-            case 257:
+    private static int keycode(int code) {
+        switch (code) {
+            case KEY_GLFW_ENTER:
+            case KEY_ASCII_ENTER:
+            case KEY_ASCII_LINEFEED:
                 return ENTER;
-            case 259:
-                return EDIT;
+            case KEY_GLFW_BACKSPACE:
+            case KEY_ASCII_BACKSPACE:
+                return EDIT_BACK;
+            case KEY_GLFW_DELETE:
+            case KEY_ASCII_DELETE:
+                return EDIT_DELETE;
             default:
                 return 0;
         }
@@ -137,14 +145,7 @@ final class WryInput {
             return;
         }
         page.remember(x, y);
-        view.evaluateJavascript("(function(){" + WryScripts.wheel(x, y, delta) + "})()",
-                new ValueCallback<String>() {
-                    @Override
-                    public void onReceiveValue(String value) {
-                        WryLog.log("wheel browser " + page.id + " amount " + amount + " delta " + delta
-                                + " -> " + value);
-                    }
-                });
+        view.evaluateJavascript("(function(){" + WryScripts.wheel(x, y, delta) + "})()", null);
     }
 
     private static boolean mouse(WryView view, int type, float x, float y) {

@@ -205,7 +205,6 @@ class WryBrowser internal constructor(
         val (x, y) = viewport.transformMouse(mouseX, mouseY, GlobalBrowserSettings.quality)
 
         native {
-            WryNative.focus(id)
             WryNative.mouseButton(id, x.toDouble(), y.toDouble(), button, true)
         }
     }
@@ -230,28 +229,18 @@ class WryBrowser internal constructor(
     }
 
     override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int) = native {
-        logger.info("key down {} scan {} mods {}", keyCode, scanCode, modifiers)
-        WryNative.focus(id)
         WryNative.key(id, true, keyCode, scanCode, modifiers)
     }
 
     override fun keyReleased(keyCode: Int, scanCode: Int, modifiers: Int) = native {
-        logger.info("key up {}", keyCode)
         WryNative.key(id, false, keyCode, scanCode, modifiers)
     }
 
     override fun charTyped(codepoint: Int) = native {
-        logger.info("char {}", codepoint)
         when (codepoint) {
-            0x08 -> {
-                WryNative.focus(id)
-                WryNative.text(id, "\b")
-            }
+            0x08 -> WryNative.text(id, "\b")
             0x0A, 0x0D -> WryNative.enter(id)
-            else -> if (codepoint < 0x20 || codepoint == 0x7F) {
-                logger.info("char {} dropped", codepoint)
-            } else {
-                WryNative.focus(id)
+            else -> if (codepoint >= 0x20 && codepoint != 0x7F) {
                 WryNative.text(id, String(Character.toChars(codepoint)))
             }
         }

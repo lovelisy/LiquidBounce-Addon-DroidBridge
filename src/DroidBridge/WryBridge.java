@@ -54,8 +54,6 @@ public final class WryBridge {
                     return;
                 }
                 if (!page.loaded || !page.drawn) {
-                    WryLog.log("browser " + id + " waits for the first draw (loaded " + page.loaded
-                            + ", drawn " + page.drawn + ")");
                     return;
                 }
                 WryStack.show(page);
@@ -131,7 +129,6 @@ public final class WryBridge {
                 if (page == null || page.view == null || page.view.getVisibility() != android.view.View.VISIBLE) {
                     return;
                 }
-                WryLog.log("enter browser " + id + " from the text input");
                 WryInput.enter(page);
             }
         });

@@ -225,7 +225,6 @@ final class WryStack {
             return;
         }
         entry.drawn = true;
-        WryLog.log("browser " + entry.id + " painted");
         show(entry);
     }
 
@@ -238,10 +237,7 @@ final class WryStack {
             return;
         }
         page.view.setVisibility(View.VISIBLE);
-        String stacking = place(page.view);
-        if (!stacking.startsWith("already")) {
-            WryLog.log("restacked browser " + page.id + " layer " + page.layer + ": " + stacking);
-        }
+        place(page.view);
     }
 
     private WryStack() {

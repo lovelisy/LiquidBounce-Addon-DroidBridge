@@ -121,9 +121,6 @@ internal object WryNative {
     @JvmStatic
     external fun mouseScroll(id: Long, x: Double, y: Double, steps: Double)
 
-    @JvmStatic
-    external fun focus(id: Long)
-
     /**
      * A key as Minecraft reports it: its keycode, scancode and modifiers.
      */
@@ -148,7 +145,6 @@ class WryEvent(
     val browser: Long,
     val kind: Int,
     val code: Int,
-    val value: Long,
     val text: String,
     val detail: String
 )

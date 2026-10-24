@@ -135,9 +135,8 @@ browser_call!(Java_liquidbounce_DroidBridge_WryNative_mouseButton(x: jdouble, y:
 });
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_mouseScroll(x: jdouble, y: jdouble, steps: jdouble) =>
     |engine, env, id| engine.pointer(id, x, y, Pointer::Scroll(steps)));
-browser_call!(Java_liquidbounce_DroidBridge_WryNative_focus() => |engine, env, id| engine.focus(id));
-browser_call!(Java_liquidbounce_DroidBridge_WryNative_key(pressed: jboolean, keycode: jint, scancode: jint,
-    modifiers: jint) => |engine, env, id| engine.key(id, Key { pressed: pressed != 0, keycode, scancode, modifiers }));
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_key(pressed: jboolean, keycode: jint, _scancode: jint,
+    _modifiers: jint) => |engine, env, id| engine.key(id, Key { pressed: pressed != 0, keycode }));
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_text(text: JString) => |engine, env, id| {
     let text = string(env, &text)?;
     engine.text(id, text)
@@ -158,11 +157,10 @@ pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_pollEvents(mut en
         for (index, event) in events.into_iter().enumerate() {
             let text = env.new_string(event.text).map_err(err)?;
             let detail = env.new_string(event.detail).map_err(err)?;
-            let object = env.new_object(&class, "(JIIJLjava/lang/String;Ljava/lang/String;)V", &[
+            let object = env.new_object(&class, "(JIILjava/lang/String;Ljava/lang/String;)V", &[
                 (event.browser as jlong).into(),
                 (event.kind as jint).into(),
                 event.code.into(),
-                event.value.into(),
                 (&text).into(),
                 (&detail).into(),
             ]).map_err(err)?;

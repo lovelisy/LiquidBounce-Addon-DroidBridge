@@ -42,7 +42,6 @@ pub struct Event {
     pub browser: BrowserId,
     pub kind: EventKind,
     pub code: i32,
-    pub value: i64,
     pub text: String,
     pub detail: String,
 }
@@ -50,7 +49,7 @@ pub struct Event {
 static EVENTS: Mutex<Vec<Event>> = Mutex::new(Vec::new());
 
 pub fn push_event(browser: BrowserId, kind: EventKind, code: i32, text: impl Into<String>, detail: impl Into<String>) {
-    push(Event { browser, kind, code, value: 0, text: text.into(), detail: detail.into() });
+    push(Event { browser, kind, code, text: text.into(), detail: detail.into() });
 }
 
 pub fn push(event: Event) {
@@ -97,6 +96,4 @@ pub enum Pointer {
 pub struct Key {
     pub pressed: bool,
     pub keycode: i32,
-    pub scancode: i32,
-    pub modifiers: i32,
 }
