@@ -238,11 +238,44 @@ public final class WryBridge {
 
     private static final Map<Long, Page> PAGES = new ConcurrentHashMap<>();
     private static final java.util.List<String> LOGS = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /**
+     * The theme draws its text with the Inter fonts, which it fetches over http at 2.8 MB. A page
+     * that paints before they arrive lays the text out with a fallback font, and the swap to the real
+     * font leaves the white blocks of the previous frame behind. Waiting for the fonts before the
+     * first frame becomes visible is what keeps those blocks off the screen.
+     */
+    private static final String FONTS =
+            "(function(){"
+                    + "if(!document.fonts||!document.fonts.ready){return 'unsupported';}"
+                    + "var pending=[];"
+                    + "['300','400','500','600'].forEach(function(weight){"
+                    + "pending.push(document.fonts.load(weight+' 14px Inter'));"
+                    + "});"
+                    + "window.__wryFonts=false;"
+                    + "Promise.all(pending).then(function(){window.__wryFonts=true;})"
+                    + ".catch(function(){window.__wryFonts=true;});"
+                    + "return 'loading';"
+                    + "})()";
+
+    /**
+     * A page that is only shown once the fonts are there still shows nothing for a moment, so the
+     * text is kept invisible until then instead of being painted and swapped.
+     */
+    private static final int TAG_ID = 0x7f0d0001;
+    private static final int TAG_LAYER = 0x7f0d0002;
 
     /**
      * One wheel step in pixels of a page, the rough distance a mouse wheel covers in a browser.
      */
     private static final float WHEEL_STEP = 100f;
+
+    /**
+     * The pages are separate views of the system that are stacked above the surface of the game, and
+     * the one that was shown last used to end up at the bottom. A screen sits above the hud, so the
+     * order is kept here rather than in the order the pages happen to be shown in.
+     */
+    private static final int LAYER_HUD = 0;
+    private static final int LAYER_SCREEN = 1;
 
     private static Handler main;
     private static String dataSuffix;
@@ -334,17 +367,18 @@ public final class WryBridge {
                             log("page probe " + value);
                         }
                     });
-                    target.post(new Runnable() {
+                    target.evaluateJavascript(FONTS, new ValueCallback<String>() {
                         @Override
-                        public void run() {
-                            Page entry = PAGES.get(id);
-                            if (entry != null && !entry.drawn) {
-                                entry.drawn = true;
-                                log("browser " + id + " painted");
-                                show(entry);
-                            }
+                        public void onReceiveValue(String value) {
+                            log("fonts " + value);
                         }
                     });
+                    awaitVisualState(target);
+                }
+
+                @Override
+                public void onPageCommitVisible(WebView target, String page) {
+                    awaitVisualState(target);
                 }
 
                 @Override
@@ -366,6 +400,11 @@ public final class WryBridge {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT);
             activity.addContentView(view, params);
+            int layer = layerOfUrl(url);
+            view.setTag(TAG_LAYER, Integer.valueOf(layer));
+            view.setTag(TAG_ID, Long.valueOf(id));
+            Page created = new Page(id, view, layer);
+            PAGES.put(id, created);
             String stacking = place(view);
             view.setVisibility(View.INVISIBLE);
             view.setFocusable(true);
@@ -373,7 +412,6 @@ public final class WryBridge {
             view.setOnFocusChangeListener(null);
             view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             view.setOnClickListener(null);
-            PAGES.put(id, new Page(id, view));
             view.loadUrl(url);
             long took = (System.nanoTime() - begin) / 1_000_000L;
             ViewGroup parent = (ViewGroup) view.getParent();
@@ -408,12 +446,11 @@ public final class WryBridge {
             return "surface has no container";
         }
         ViewGroup holder = (ViewGroup) surfaceParent;
-        int wanted = holder.indexOfChild(surface) + 1;
-        if (holder == parent) {
-            if (holder.indexOfChild(view) == wanted) {
-                return "already above the surface";
-            }
-        } else {
+        int wanted = slotFor(holder, surface, view);
+        if (holder == parent && holder.indexOfChild(view) == wanted) {
+            return "already above the surface";
+        }
+        if (holder != parent) {
             ((ViewGroup) parent).removeView(view);
         }
         ViewGroup.LayoutParams params = view.getLayoutParams();
@@ -422,6 +459,115 @@ public final class WryBridge {
         fit(holder, view);
         return "stacked at " + holder.indexOfChild(view) + " of " + holder.getChildCount()
                 + " in " + holder.getClass().getName();
+    }
+
+    /**
+     * A page belongs above the surface and above every page of a lower layer, but below every page
+     * of a higher one, so the hud never covers a screen and a screen never covers its own input.
+     */
+    private static int slotFor(ViewGroup holder, View surface, View view) {
+        int layer = layerOf(view);
+        int slot = holder.indexOfChild(surface) + 1;
+        for (int index = slot; index < holder.getChildCount(); index++) {
+            View child = holder.getChildAt(index);
+            if (child == view) {
+                continue;
+            }
+            if (!(child instanceof OverlayWebView)) {
+                continue;
+            }
+            if (layerOf(child) > layer) {
+                break;
+            }
+            slot = index + 1;
+        }
+        return slot;
+    }
+
+    private static int layerOf(View view) {
+        Object tag = view.getTag(TAG_LAYER);
+        return tag instanceof Integer ? ((Integer) tag).intValue() : LAYER_HUD;
+    }
+
+    /**
+     * The hud is the only page of the theme that belongs to the world. Every other page is a screen
+     * and covers it, so the url is what tells them apart.
+     */
+    private static int layerOfUrl(String url) {
+        if (url == null) {
+            return LAYER_HUD;
+        }
+        if (url.contains("/hud") || url.contains("/inventory")) {
+            return LAYER_HUD;
+        }
+        return LAYER_SCREEN;
+    }
+
+    /**
+     * A post after the page finished loading runs on the next loop turn, which is before the system
+     * has drawn the page: the first frame that appears is then a half composed one, with the white
+     * blocks of elements that have a color but no masked image yet. The visual state callback is
+     * raised by the compositor once the page is ready to be shown.
+     */
+    private static void awaitVisualState(WebView view) {
+        if (android.os.Build.VERSION.SDK_INT < 23) {
+            markPainted(view);
+            return;
+        }
+        view.postVisualStateCallback(System.nanoTime(), new WebView.VisualStateCallback() {
+            @Override
+            public void onComplete(long requestId) {
+                awaitFonts(view);
+            }
+        });
+    }
+
+    /**
+     * The compositor reports a frame as drawn even while the fonts are still on their way, and the
+     * text of that frame is then laid out with a fallback font. The swap leaves the white blocks of
+     * the old text behind, so the fonts have to be in before the page is allowed on screen. The page
+     * loads them on its own, this only waits for the flag that the injection sets.
+     */
+    private static void awaitFonts(final WebView view) {
+        pollFonts(view, 0);
+    }
+
+    private static void pollFonts(final WebView view, final int attempt) {
+        if (attempt > 40) {
+            markPainted(view);
+            return;
+        }
+        view.evaluateJavascript(
+                "window.__wryFonts===true||!document.fonts",
+                new ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String value) {
+                        if ("true".equals(value)) {
+                            markPainted(view);
+                            return;
+                        }
+                        view.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                pollFonts(view, attempt + 1);
+                            }
+                        }, 50);
+                    }
+                });
+    }
+
+    private static void markPainted(WebView view) {
+        Object tag = view.getTag(TAG_ID);
+        if (!(tag instanceof Long)) {
+            return;
+        }
+        Page entry = PAGES.get((Long) tag);
+        if (entry == null || entry.drawn) {
+            return;
+        }
+        entry.drawn = true;
+        log("browser " + entry.id + " painted");
+        show(entry);
     }
 
     private static View findSurface(ViewGroup group, View skip) {
@@ -516,8 +662,8 @@ public final class WryBridge {
         }
         page.view.setVisibility(View.VISIBLE);
         String stacking = place(page.view);
-        if (!"already above the surface".equals(stacking)) {
-            log("restacked browser " + page.id + ": " + stacking);
+        if (!stacking.startsWith("already")) {
+            log("restacked browser " + page.id + " layer " + page.layer + ": " + stacking);
         }
     }
 
@@ -930,6 +1076,7 @@ public final class WryBridge {
 
         final OverlayWebView view;
         final long id;
+        final int layer;
         volatile boolean loaded;
         volatile boolean drawn;
         volatile boolean wanted;
@@ -949,8 +1096,13 @@ public final class WryBridge {
         boolean sent;
 
         Page(long id, OverlayWebView view) {
+            this(id, view, LAYER_HUD);
+        }
+
+        Page(long id, OverlayWebView view, int layer) {
             this.id = id;
             this.view = view;
+            this.layer = layer;
         }
 
         boolean sameSpot(float x, float y) {
