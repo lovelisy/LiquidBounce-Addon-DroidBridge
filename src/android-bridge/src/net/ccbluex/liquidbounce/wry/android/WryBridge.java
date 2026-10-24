@@ -25,6 +25,91 @@ import java.util.concurrent.TimeUnit;
 
 public final class WryBridge {
 
+    /**
+     * Chrome 116 drops the unprefixed mask properties, which the theme uses to paint the menu icons.
+     * The icons are drawn as a masked background, while an invisible image inside the same element
+     * already carries the resolved source, so that source is what the prefixed form is built from.
+     */
+    private static final String MASKS =
+            "(function(){"
+                    + "if(window.__wryMask){return 'already';}"
+                    + "window.__wryMask=true;"
+                    + "var style=document.createElement('style');"
+                    + "style.textContent='.title-button-icon{-webkit-mask-position:center!important;"
+                    + "-webkit-mask-repeat:no-repeat!important;-webkit-mask-size:contain!important;}';"
+                    + "document.head.appendChild(style);"
+                    + "var fixed=0;"
+                    + "function fromImage(el){"
+                    + "var img=el.querySelector('img');"
+                    + "if(!img||!img.src){return false;}"
+                    + "if(el.__wryMasked){return false;}"
+                    + "el.style.webkitMaskImage='url(\"'+img.src+'\")';"
+                    + "el.__wryMasked=true;"
+                    + "return true;"
+                    + "}"
+                    + "function fromStyle(el){"
+                    + "if(el.__wryMasked){return false;}"
+                    + "var raw=el.getAttribute('style');"
+                    + "if(!raw||raw.indexOf('mask')<0){return false;}"
+                    + "var pattern=/(^|;)\\s*mask-(image|position|repeat|size|origin|clip)\\s*:\\s*([^;]+)/g;"
+                    + "var match;"
+                    + "var found=false;"
+                    + "while((match=pattern.exec(raw))!==null){"
+                    + "var value=match[3].trim().replace(/([^:])\\/{2,}/g,'$1/');"
+                    + "el.style.setProperty('-webkit-mask-'+match[2],value);"
+                    + "found=true;"
+                    + "}"
+                    + "if(found){el.__wryMasked=true;}"
+                    + "return found;"
+                    + "}"
+                    + "function mirror(el){"
+                    + "if(!el||el.nodeType!==1){return;}"
+                    + "var done=fromImage(el)||fromStyle(el);"
+                    + "if(done){fixed++;}"
+                    + "}"
+                    + "function scan(root){"
+                    + "if(!root.querySelectorAll){return;}"
+                    + "var icons=root.querySelectorAll('.title-button-icon');"
+                    + "for(var i=0;i<icons.length;i++){mirror(icons[i]);}"
+                    + "var styled=root.querySelectorAll('[style*=\"mask\"]');"
+                    + "for(var j=0;j<styled.length;j++){mirror(styled[j]);}"
+                    + "}"
+                    + "var observer=new MutationObserver(function(records){"
+                    + "for(var i=0;i<records.length;i++){"
+                    + "var record=records[i];"
+                    + "if(record.type==='attributes'){mirror(record.target);continue;}"
+                    + "var added=record.addedNodes;"
+                    + "for(var j=0;j<added.length;j++){"
+                    + "if(added[j].nodeType===1){mirror(added[j]);scan(added[j]);}"
+                    + "}"
+                    + "}"
+                    + "});"
+                    + "observer.observe(document.body,{childList:true,subtree:true,"
+                    + "attributes:true,attributeFilter:['style']});"
+                    + "scan(document.body);"
+                    + "console.log('[Wry] mask rewrite on '+fixed+' elements');"
+                    + "return 'masked '+fixed;"
+                    + "})()";
+
+    private static final String PROBE =
+            "JSON.stringify((function(){"
+                    + "var icons=document.getElementsByClassName('title-button-icon');"
+                    + "var first=icons.length?icons[0]:null;"
+                    + "var computed=first?getComputedStyle(first):null;"
+                    + "var inline=first?first.getAttribute('style'):null;"
+                    + "var canvas=document.getElementsByTagName('canvas');"
+                    + "var gl=null;"
+                    + "try{gl=!!document.createElement('canvas').getContext('webgl2');}catch(e){gl='error';}"
+                    + "return {ua:navigator.userAgent,icons:icons.length,"
+                    + "inline:inline,"
+                    + "computedMask:computed?computed.maskImage:'',"
+                    + "computedWebkitMask:computed?computed.webkitMaskImage:'',"
+                    + "size:computed?computed.maskSize+'/'+computed.webkitMaskSize:'',"
+                    + "bg:computed?computed.backgroundColor:'',"
+                    + "rect:first?JSON.stringify(first.getBoundingClientRect()):'',"
+                    + "canvases:canvas.length,webgl2:gl};"
+                    + "})())";
+
     private static final Map<Long, Page> PAGES = new ConcurrentHashMap<>();
     private static final java.util.List<String> LOGS = new java.util.concurrent.CopyOnWriteArrayList<>();
 
@@ -103,30 +188,13 @@ public final class WryBridge {
                     if (entry != null) {
                         entry.loaded = true;
                     }
-                    target.evaluateJavascript(
-                            "JSON.stringify((function(){"
-                                    + "var d=document.createElement('div');"
-                                    + "d.style.maskImage='url(x)';"
-                                    + "var webkit=d.style.webkitMaskImage;"
-                                    + "d.style.maskImage='';"
-                                    + "d.style.webkitMaskImage='url(x)';"
-                                    + "var canvas=document.getElementsByTagName('canvas');"
-                                    + "var gl=null;"
-                                    + "try{gl=!!document.createElement('canvas').getContext('webgl2');}catch(e){gl='error';}"
-                                    + "var icons=document.getElementsByClassName('title-button-icon');"
-                                    + "var sample=icons.length?getComputedStyle(icons[0]).maskImage:'';"
-                                    + "return {ua:navigator.userAgent,"
-                                    + "mask:d.style.maskImage,webkitMask:webkit,"
-                                    + "webkitApplied:d.style.webkitMaskImage,"
-                                    + "computed:sample,"
-                                    + "icons:icons.length,canvases:canvas.length,webgl2:gl};"
-                                    + "})())",
-                            new ValueCallback<String>() {
-                                @Override
-                                public void onReceiveValue(String value) {
-                                    log("page probe " + value);
-                                }
-                            });
+                    target.evaluateJavascript(MASKS, null);
+                    target.evaluateJavascript(PROBE, new ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String value) {
+                            log("page probe " + value);
+                        }
+                    });
                 }
 
                 @Override
@@ -322,72 +390,121 @@ public final class WryBridge {
         if (view.getVisibility() != View.VISIBLE || view.getWidth() <= 0 || view.getHeight() <= 0) {
             return;
         }
-        float sx = x * view.getWidth();
-        float sy = y * view.getHeight();
-        long now = SystemClock.uptimeMillis();
-        int type;
         if (action == 1) {
             page.pressed = true;
-            page.downTime = now;
-            type = MotionEvent.ACTION_DOWN;
-        } else if (action == 2) {
+            page.pressedButton = button;
+            page.hovers = 0;
+            dom(page, view, x, y, "down", button);
+            return;
+        }
+        if (action == 2) {
+            int released = page.pressedButton != 0 ? page.pressedButton : button;
             page.pressed = false;
-            type = MotionEvent.ACTION_UP;
-        } else if (action == 3) {
-            type = MotionEvent.ACTION_SCROLL;
-        } else {
-            type = page.pressed ? MotionEvent.ACTION_MOVE : MotionEvent.ACTION_HOVER_MOVE;
+            page.pressedButton = 0;
+            dom(page, view, x, y, "up", released);
+            return;
         }
-        boolean touch = type == MotionEvent.ACTION_DOWN
-                || type == MotionEvent.ACTION_MOVE
-                || type == MotionEvent.ACTION_UP;
-        long eventDownTime = touch ? page.downTime : now;
-        int bit = buttonState(button);
-        int buttonState = 0;
-        if (type == MotionEvent.ACTION_DOWN || type == MotionEvent.ACTION_MOVE) {
-            buttonState = bit;
+        if (action == 3) {
+            scroll(page, view, x, y, amount);
+            return;
         }
+        if (page.pressed) {
+            dom(page, view, x, y, "move", page.pressedButton);
+            return;
+        }
+        hover(page, view, x, y);
+    }
+
+    private static void hover(Page page, OverlayWebView view, float x, float y) {
+        boolean accepted = mouse(view, MotionEvent.ACTION_HOVER_MOVE, x, y, 0f);
+        if (page.hovers > 3) {
+            return;
+        }
+        page.hovers++;
+        log("pointer browser " + page.id + " hover accepted " + accepted
+                + " at " + (x * view.getWidth()) + "," + (y * view.getHeight())
+                + " size " + view.getWidth() + "x" + view.getHeight());
+    }
+
+    private static void scroll(Page page, OverlayWebView view, float x, float y, float amount) {
+        boolean accepted = mouse(view, MotionEvent.ACTION_SCROLL, x, y, amount);
+        log("pointer browser " + page.id + " scroll " + amount + " accepted " + accepted);
+    }
+
+    private static boolean mouse(OverlayWebView view, int type, float x, float y, float amount) {
+        long now = SystemClock.uptimeMillis();
         MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
         properties.id = 0;
         properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
         MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
-        coords.x = sx;
-        coords.y = sy;
+        coords.x = x * view.getWidth();
+        coords.y = y * view.getHeight();
         if (type == MotionEvent.ACTION_SCROLL) {
             coords.setAxisValue(MotionEvent.AXIS_VSCROLL, -amount);
         }
-        MotionEvent event = MotionEvent.obtain(eventDownTime, now, type, 1,
+        MotionEvent event = MotionEvent.obtain(now, now, type, 1,
                 new MotionEvent.PointerProperties[]{properties},
                 new MotionEvent.PointerCoords[]{coords},
-                0, buttonState, 1.0f, 1.0f, 0, 0,
+                0, 0, 1.0f, 1.0f, 0, 0,
                 InputDevice.SOURCE_MOUSE, 0);
         if (!view.isFocused()) {
             view.requestFocus();
         }
-        view.inject(event);
+        boolean accepted = view.inject(event);
         event.recycle();
-        log("pointer browser " + page.id + " " + typeName(type) + " at " + sx + "," + sy
-                + " button " + button + " state " + buttonState
-                + " focused " + view.isFocused()
-                + " visible " + (view.getVisibility() == View.VISIBLE)
-                + " size " + view.getWidth() + "x" + view.getHeight());
+        return accepted;
     }
 
-    private static String typeName(int type) {
-        switch (type) {
-            case MotionEvent.ACTION_DOWN:
-                return "down";
-            case MotionEvent.ACTION_UP:
-                return "up";
-            case MotionEvent.ACTION_MOVE:
-                return "move";
-            case MotionEvent.ACTION_HOVER_MOVE:
-                return "hover";
-            case MotionEvent.ACTION_SCROLL:
-                return "scroll";
-            default:
-                return Integer.toString(type);
+    /**
+     * A motion event cannot carry the button that was released, so Chromium never reports a click for
+     * one. The page is driven directly instead, where the coordinates are taken as fractions of the
+     * viewport and the target is resolved by hit testing.
+     */
+    private static void dom(Page page, OverlayWebView view, final float x, final float y,
+                            final String phase, int button) {
+        if (!view.isFocused()) {
+            view.requestFocus();
         }
+        int domButton = button == 2 ? 2 : (button == 3 ? 1 : 0);
+        int bit = domButton == 2 ? 2 : (domButton == 1 ? 4 : 1);
+        boolean down = "down".equals(phase);
+        boolean up = "up".equals(phase);
+
+        StringBuilder script = new StringBuilder("(function(){")
+                .append("var x=").append(x).append("*window.innerWidth,")
+                .append("y=").append(y).append("*window.innerHeight;")
+                .append("var t=document.elementFromPoint(x,y)||document.body;")
+                .append("var o={bubbles:true,cancelable:true,view:window,button:").append(domButton)
+                .append(",buttons:").append(up ? 0 : bit)
+                .append(",clientX:x,clientY:y,screenX:x,screenY:y")
+                .append(",pointerId:1,pointerType:'mouse',isPrimary:true,width:1,height:1,pressure:")
+                .append(up ? "0" : "0.5").append("};");
+        if (down) {
+            script.append("if(t.focus&&(t.tagName=='INPUT'||t.tagName=='TEXTAREA'||t.isContentEditable)){t.focus();}");
+            script.append("t.dispatchEvent(new PointerEvent('pointerdown',o));")
+                    .append("t.dispatchEvent(new MouseEvent('mousedown',o));");
+        } else if (up) {
+            script.append("t.dispatchEvent(new PointerEvent('pointerup',o));")
+                    .append("t.dispatchEvent(new MouseEvent('mouseup',o));");
+            if (domButton == 2) {
+                script.append("t.dispatchEvent(new MouseEvent('contextmenu',o));");
+            } else {
+                script.append("t.dispatchEvent(new MouseEvent('click',o));");
+            }
+        } else {
+            script.append("t.dispatchEvent(new PointerEvent('pointermove',o));")
+                    .append("t.dispatchEvent(new MouseEvent('mousemove',o));");
+        }
+        script.append("return t.tagName;})( )");
+
+        view.evaluateJavascript(script.toString(), new ValueCallback<String>() {
+            @Override
+            public void onReceiveValue(String value) {
+                log("pointer browser " + page.id + " " + phase + " at "
+                        + (x * view.getWidth()) + "," + (y * view.getHeight())
+                        + " on " + value + " button " + button);
+            }
+        });
     }
 
     public static void key(final long id, final int keycode, final boolean pressed) {
@@ -473,16 +590,6 @@ public final class WryBridge {
         }
     }
 
-    private static int buttonState(int button) {
-        if (button == 2) {
-            return MotionEvent.BUTTON_SECONDARY;
-        }
-        if (button == 3) {
-            return MotionEvent.BUTTON_TERTIARY;
-        }
-        return MotionEvent.BUTTON_PRIMARY;
-    }
-
     private static int keycode(int glfw) {
         switch (glfw) {
             case 256:
@@ -522,7 +629,8 @@ public final class WryBridge {
         final long id;
         volatile boolean loaded;
         boolean pressed;
-        long downTime;
+        int pressedButton;
+        int hovers;
         float pendingX;
         float pendingY;
         boolean hoverPosted;
