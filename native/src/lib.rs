@@ -1,27 +1,11 @@
-//! Wry's webview as a browser for LiquidBounce, called from `net.ccbluex.liquidbounce.wry.WryNative`.
+//! The web view of Android, called from `net.ccbluex.liquidbounce.wry.WryNative`.
 
 pub mod api;
-pub mod keys;
-pub mod script;
 
-#[cfg(target_os = "linux")]
-mod linux;
-#[cfg(target_os = "linux")]
-pub use linux::Engine;
-#[cfg(target_os = "windows")]
-mod win;
-#[cfg(target_os = "windows")]
-pub use win::Engine;
-#[cfg(target_os = "macos")]
-mod macos;
-#[cfg(target_os = "macos")]
-pub use macos::Engine;
-#[cfg(target_os = "android")]
 mod android;
-#[cfg(target_os = "android")]
 pub use android::Engine;
 
-use api::{BrowserOptions, Frame, Key, MouseButton, Pointer, StartOptions};
+use api::{Key, MouseButton, Pointer, StartOptions};
 use jni::objects::{JClass, JLongArray, JObject, JString};
 use jni::sys::{jboolean, jdouble, jint, jlong, jobjectArray};
 use jni::JNIEnv;
@@ -30,7 +14,6 @@ use std::sync::{Mutex, MutexGuard};
 
 struct Shared(Option<Engine>);
 
-// Only the game's render thread calls in
 unsafe impl Send for Shared {}
 
 static ENGINE: Mutex<Shared> = Mutex::new(Shared(None));
@@ -58,7 +41,7 @@ fn guard<T: Default>(env: &mut JNIEnv, call: impl FnOnce(&mut JNIEnv) -> api::Re
 fn with_engine<T: Default>(env: &mut JNIEnv, call: impl FnOnce(&mut Engine, &mut JNIEnv) -> api::Result<T>) -> T {
     guard(env, |env| {
         let mut shared = engine();
-        let engine = shared.0.as_mut().ok_or("Wry is not started")?;
+        let engine = shared.0.as_mut().ok_or("DroidBridge is not started")?;
         call(engine, env)
     })
 }
@@ -69,19 +52,14 @@ fn string(env: &mut JNIEnv, value: &JString) -> api::Result<String> {
 
 #[no_mangle]
 pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_start(mut env: JNIEnv, _: JClass, data_dir: JString,
-    gpu_frames: jboolean, render_node: JString, formats: JLongArray) {
+    _gpu_frames: jboolean, _render_node: JString, _formats: JLongArray) {
     guard(&mut env, |env| {
         let mut shared = engine();
         if shared.0.is_some() {
-            return Err("Wry is already started".into());
+            return Err("DroidBridge is already started".into());
         }
         let data_dir = string(env, &data_dir)?.into();
-        let render_node = if render_node.is_null() { None } else { Some(string(env, &render_node)?.into()) };
-        let length = env.get_array_length(&formats).map_err(|e| e.to_string())? as usize;
-        let mut pairs = vec![0i64; length];
-        env.get_long_array_region(&formats, 0, &mut pairs).map_err(|e| e.to_string())?;
-        let formats = pairs.chunks_exact(2).map(|pair| (pair[0] as u32, pair[1] as u64)).collect();
-        shared.0 = Some(Engine::start(StartOptions { data_dir, gpu_frames: gpu_frames != 0, render_node, formats })?);
+        shared.0 = Some(Engine::start(StartOptions { data_dir })?);
         Ok(())
     })
 }
@@ -109,7 +87,7 @@ pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_update(mut en
 pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_createBrowser(mut env: JNIEnv, _: JClass, url: JString,
     width: jint, height: jint, zoom: jdouble, incognito: jboolean, fps: jint) -> jlong {
     with_engine(&mut env, |engine, env| {
-        let options = BrowserOptions {
+        let options = api::BrowserOptions {
             url: string(env, &url)?,
             width: width.max(1) as u32,
             height: height.max(1) as u32,
@@ -200,49 +178,13 @@ pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_pollEvents(mu
     })
 }
 
-/// Writes the newest frame of a browser into `out` and returns its kind, 0 when there is no new one.
-///
-/// `out` holds width, height, stride, flags (1 BGRA, 2 flipped), the address, handle or surface, the length in
-/// bytes, the buffer id, the fourcc, the modifier and the plane count, followed by fd, offset and stride per plane.
+/// The page is drawn by the system web view straight onto the game surface, so there is never a frame to hand out.
 #[no_mangle]
 pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_takeFrame(mut env: JNIEnv, _: JClass, id: jlong,
     out: JLongArray) -> jint {
     with_engine(&mut env, |engine, env| {
-        let Some(frame) = engine.take_frame(id as api::BrowserId) else { return Ok(0) };
-        let mut values = [0i64; 32];
-        let kind = match frame {
-            Frame::Pixels { data, len, width, height, stride, bgra, flipped } => {
-                values[..6].copy_from_slice(&[width as i64, height as i64, stride as i64,
-                    bgra as i64 | (flipped as i64) << 1, data as i64, len as i64]);
-                1
-            }
-            Frame::DmaBuf { id, fds, offsets, strides, fourcc, modifier, width, height } => {
-                values[..3].copy_from_slice(&[width as i64, height as i64, strides[0] as i64]);
-                values[6..10].copy_from_slice(&[id as i64, fourcc as i64, modifier as i64, fds.len() as i64]);
-                for plane in 0..fds.len().min(4) {
-                    values[10 + plane * 3..13 + plane * 3].copy_from_slice(&[fds[plane] as i64, offsets[plane] as i64,
-                        strides[plane] as i64]);
-                }
-                2
-            }
-            Frame::SharedTexture { handle, width, height } => {
-                values[..5].copy_from_slice(&[width as i64, height as i64, 0, 1, handle]);
-                3
-            }
-            Frame::IoSurface { surface, width, height, flipped } => {
-                values[..5].copy_from_slice(&[width as i64, height as i64, 0, 1 | (flipped as i64) << 1, surface]);
-                4
-            }
-        };
-        env.set_long_array_region(&out, 0, &values).map_err(|e| e.to_string())?;
-        Ok(kind)
+        let _ = engine.take_frame(id as api::BrowserId);
+        let _ = env.set_long_array_region(&out, 0, &[0i64; 32]);
+        Ok(0)
     })
-}
-
-/// Binds an IOSurface to the rectangle texture bound on the game's OpenGL context, returns the CGL error.
-#[cfg(target_os = "macos")]
-#[no_mangle]
-pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_bindIoSurface(_env: JNIEnv, _: JClass, surface: jlong,
-    width: jint, height: jint) -> jint {
-    macos::bind_io_surface(surface, width, height)
 }

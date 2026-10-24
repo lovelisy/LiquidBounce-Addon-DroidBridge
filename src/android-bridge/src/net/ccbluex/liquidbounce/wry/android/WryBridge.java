@@ -95,7 +95,7 @@ public final class WryBridge {
                     + "observer.observe(document.body,{childList:true,subtree:true,"
                     + "attributes:true,attributeFilter:['style']});"
                     + "scan(document.body);"
-                    + "console.log('[Wry] mask rewrite on '+fixed+' elements');"
+                    + "console.log('[DroidBridge] mask rewrite on '+fixed+' elements');"
                     + "return 'masked '+fixed;"
                     + "})()";
 

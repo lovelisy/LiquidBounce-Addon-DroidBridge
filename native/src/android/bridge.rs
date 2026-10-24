@@ -6,7 +6,7 @@ use std::path::Path;
 
 const DEX: &[u8] = include_bytes!("../../android-bridge.dex");
 const CLASS: &str = "net.ccbluex.liquidbounce.wry.android.WryBridge";
-const FOLDER: &str = "liquidbounce-wry";
+const FOLDER: &str = "liquidbounce-droidbridge";
 
 macro_rules! jni {
     ($env:expr, $expression:expr, $context:expr) => {

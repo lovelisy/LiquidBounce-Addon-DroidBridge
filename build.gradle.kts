@@ -28,28 +28,9 @@ repositories {
     }
 }
 
-// `./gradlew runClientGameTest` starts the client with the add-on and runs src/gametest.
+// The pages are drawn by the web view of Android, so the access widener only covers the client's integration API.
 loom {
-    accessWidenerPath = file("src/main/resources/liquidbounce-wry.accesswidener")
-}
-
-fabricApi {
-    configureTests {
-        createSourceSet = true
-        modId = "liquidbounce-wry-gametest"
-        enableGameTests = false
-    }
-}
-
-loom.runs.named("clientGameTest") {
-    // A loader error would otherwise wait on a dialog nobody sees; the client's own fatal errors go to
-    // the log when CI is set.
-    systemProperties.put("fabric.noGui", "true")
-    environmentVars.put("CI", "true")
-}
-
-tasks.named<JavaExec>("runClientGameTest") {
-    maxHeapSize = "4G"
+    accessWidenerPath = file("src/main/resources/liquidbounce-droidbridge.accesswidener")
 }
 
 // Two things to leave alone here:
@@ -69,8 +50,6 @@ dependencies {
 
     // The client itself; there is no separate API artifact.
     implementation(libs.liquidbounce)
-    // The client ships it
-    compileOnly(libs.lwjgl.egl)
 }
 
 // Gradle keeps a resolved snapshot for a day; the client publishes one on every push to nextgen.
@@ -103,29 +82,15 @@ tasks.processResources {
     }
 }
 
-// The native library goes into the jar under natives/<os>-<arch>/. CI builds it for every platform and passes the
-// directory with -Pnatives=<dir>; without it, the library is built with cargo for this machine only.
+// The native library goes into the jar under natives/<os>-<arch>/. CI builds it and passes the directory with
+// -Pnatives=<dir>; without it, the library is built with cargo for this machine only.
 val nativesDir = providers.gradleProperty("natives").map { file(it) }
-val isAndroid = System.getenv("ANDROID_DATA") != null || File("/system/build.prop").isFile
-val hostPlatform = run {
-    val os = System.getProperty("os.name").lowercase()
-    val arch = when (System.getProperty("os.arch")) {
-        "amd64", "x86_64" -> "x64"
-        "aarch64", "arm64" -> "arm64"
-        else -> System.getProperty("os.arch")
-    }
-    when {
-        isAndroid -> "android-$arch"
-        os.contains("win") -> "windows-$arch"
-        os.contains("mac") -> "macos-$arch"
-        else -> "linux-$arch"
-    }
+val hostPlatform = "android-" + when (System.getProperty("os.arch")) {
+    "amd64", "x86_64" -> "x64"
+    "aarch64", "arm64" -> "arm64"
+    else -> System.getProperty("os.arch")
 }
-val nativeLibrary = when {
-    hostPlatform.startsWith("windows") -> "liquidbounce_wry.dll"
-    hostPlatform.startsWith("macos") -> "libliquidbounce_wry.dylib"
-    else -> "libliquidbounce_wry.so"
-}
+val nativeLibrary = "libliquidbounce_droidbridge.so"
 
 val cargoBuild = tasks.register<Exec>("cargoBuild") {
     description = "Builds the native library for this machine."

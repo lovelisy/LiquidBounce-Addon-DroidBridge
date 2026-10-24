@@ -1,11 +1,5 @@
 package net.ccbluex.liquidbounce.wry
 
-import com.mojang.blaze3d.systems.RenderSystem
-import com.mojang.renderpearl.api.GpuFormat
-import com.mojang.renderpearl.api.buffers.GpuBuffer
-import com.mojang.renderpearl.api.textures.FilterMode
-import com.mojang.renderpearl.api.textures.GpuTexture
-import com.mojang.renderpearl.api.textures.GpuTextureView
 import net.ccbluex.liquidbounce.integration.backend.BrowserTexture
 import net.ccbluex.liquidbounce.integration.backend.browser.Browser
 import net.ccbluex.liquidbounce.integration.backend.browser.BrowserRenderer
@@ -18,14 +12,10 @@ import net.ccbluex.liquidbounce.integration.backend.input.InputHandler
 import net.ccbluex.liquidbounce.integration.backend.input.InputListener
 import net.ccbluex.liquidbounce.integration.screen.ScreenManager
 import net.ccbluex.liquidbounce.utils.client.mc
-import net.minecraft.client.gui.render.TextureSetup
 import org.apache.logging.log4j.LogManager
-import org.joml.component1
-import org.joml.component2
-import org.lwjgl.system.MemoryUtil
 
 /**
- * A browser of the Wry backend, a web view the native library draws off-screen.
+ * A browser of the Android backend, a web view the system draws on top of the game.
  *
  * Everything that reaches the native library happens on the render thread.
  */
@@ -42,33 +32,21 @@ class WryBrowser internal constructor(
 
     internal val id: Long
 
-    private val logger = LogManager.getLogger("LiquidBounce/WryBrowser/${System.identityHashCode(this)}")
+    private val logger = LogManager.getLogger("LiquidBounce/DroidBridge/${System.identityHashCode(this)}")
 
     @Volatile
     private var currentUrl = url
 
-    private var fps = settings.currentFps
     private var size = viewport.getScaledDimensions(GlobalBrowserSettings.quality)
     private var isClosed = false
     private var shownScreen = false
-
-    private val frame = LongArray(32)
-    private var uploadTexture: GpuTexture? = null
-    private var uploadView: GpuTextureView? = null
-    private var shown: BrowserTexture? = null
-
-    /**
-     * The GPU buffer the browser shows, which has to stay imported.
-     */
-    internal var shownBuffer: Long? = null
-        private set
 
     init {
         require(url.isNotEmpty()) { "URL cannot be empty." }
 
         val quality = GlobalBrowserSettings.quality
         val (width, height) = size
-        id = WryNative.createBrowser(url, width, height, quality.toDouble(), isIncognito, fps)
+        id = WryNative.createBrowser(url, width, height, quality.toDouble(), isIncognito, settings.currentFps)
 
         logger.info("Initialized browser (url='$url')")
     }
@@ -120,8 +98,11 @@ class WryBrowser internal constructor(
             }
         }
 
+    /**
+     * The web view of the system is drawn by the system on top of the game, so the game has no texture of it.
+     */
     override val texture: BrowserTexture?
-        get() = shown
+        get() = null
 
     override fun forceReload() = onRenderThread { WryNative.reload(id, true) }
 
@@ -144,10 +125,6 @@ class WryBrowser internal constructor(
             if (backend.isInitialized) {
                 WryNative.closeBrowser(id)
             }
-            shown = null
-            shownBuffer = null
-            uploadView?.close()
-            uploadTexture?.close()
         }
     }
 
@@ -159,7 +136,7 @@ class WryBrowser internal constructor(
         viewport = viewport.copy(width = width, height = height)
     }
 
-    // Pages send a new frame whenever they change
+    // The page is a view of the system, it invalidates itself
     override fun invalidate() = Unit
 
     override fun toString() = "WryBrowser(" +
@@ -176,11 +153,11 @@ class WryBrowser internal constructor(
      * never asked, so it is shown whenever a client screen is open.
      */
     private fun pushVisible() {
-        val show = if (priority > 0 || inputAcceptorOwnsScreen()) {
+        val show = if (priority > 0 || inputListener != null) {
             ScreenManager.isClientScreen(mc.gui.screen()) &&
                 (visible || ScreenManager.mainBrowser === this)
         } else {
-            visible && isHudWanted()
+            visible && isOverlayWanted()
         }
         if (show == shownScreen) {
             return
@@ -189,76 +166,17 @@ class WryBrowser internal constructor(
         onRenderThread { WryNative.setVisible(id, show) }
     }
 
-    private fun inputAcceptorOwnsScreen() = inputListener != null
-
     /**
      * The HUD is an overlay, so unlike the main tab it belongs to the world rather than to a client
      * screen and stays up while no screen is open.
      */
-    private fun isHudWanted() = ScreenManager.isClientScreen(mc.gui.screen()) || mc.player != null
+    private fun isOverlayWanted() = ScreenManager.isClientScreen(mc.gui.screen()) || mc.player != null
 
     /**
-     * Brings the newest frame of the page into a texture of the game.
+     * Pushes what the game tells the web view this frame.
      */
     internal fun updateFrame() {
-        if (settings.currentFps != fps) {
-            fps = settings.currentFps
-            WryNative.setFps(id, fps)
-        }
         pushVisible()
-        if (!visible) {
-            return
-        }
-
-        when (WryNative.takeFrame(id, frame)) {
-            WryNative.FRAME_PIXELS -> upload(
-                address = frame[4],
-                length = frame[5].toInt(),
-                width = frame[0].toInt(),
-                height = frame[1].toInt(),
-                stride = frame[2].toInt(),
-                bgra = frame[3] and 1L != 0L
-            )
-            WryNative.FRAME_DMA_BUF, WryNative.FRAME_SHARED_TEXTURE, WryNative.FRAME_IO_SURFACE -> {
-                val importer = backend.gpuImporter ?: return
-                val texture = importer.texture(frame) ?: return
-                shownBuffer = importer.id(frame)
-                shown = BrowserTexture(
-                    TextureSetup.singleTexture(texture, sampler), viewport.width, viewport.height, importer.bgra
-                )
-            }
-        }
-    }
-
-    @Suppress("LongParameterList")
-    private fun upload(address: Long, length: Int, width: Int, height: Int, stride: Int, bgra: Boolean) {
-        val device = RenderSystem.getDevice()
-        var texture = uploadTexture
-        var view = uploadView
-        if (texture == null || view == null || texture.getWidth(0) != width || texture.getHeight(0) != height) {
-            view?.close()
-            texture?.close()
-            texture = device.createTexture(
-                "Wry browser $id",
-                GpuTexture.USAGE_COPY_DST or GpuTexture.USAGE_TEXTURE_BINDING,
-                GpuFormat.RGBA8_UNORM,
-                width,
-                height,
-                1,
-                1
-            )
-            view = device.createTextureView(texture)
-            uploadTexture = texture
-            uploadView = view
-        }
-
-        val encoder = device.createCommandEncoder()
-        val staging = encoder.transientMemory()
-            .uploadStaging(MemoryUtil.memByteBuffer(address, length), 4L, GpuBuffer.USAGE_COPY_SRC)
-        encoder.copyBufferToTexture(staging, 0, 0, stride / 4, height, texture, 0, 0, width, height, 0, 0)
-
-        shownBuffer = null
-        shown = BrowserTexture(TextureSetup.singleTexture(view, sampler), viewport.width, viewport.height, bgra)
     }
 
     internal fun onEvent(event: WryEvent) {
@@ -330,16 +248,11 @@ class WryBrowser internal constructor(
     }
 
     private fun onRenderThread(action: () -> Unit) {
-        if (RenderSystem.isOnRenderThread()) {
+        if (com.mojang.blaze3d.systems.RenderSystem.isOnRenderThread()) {
             action()
         } else {
             mc.execute(action)
         }
-    }
-
-    private companion object {
-        val sampler
-            get() = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR)
     }
 
 }

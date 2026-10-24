@@ -1,7 +1,7 @@
 mod art;
 mod bridge;
 
-use crate::api::{self, BrowserId, BrowserOptions, Frame, Key, MouseButton, Pointer, StartOptions};
+use crate::api::{self, BrowserId, BrowserOptions, Key, MouseButton, Pointer, StartOptions};
 use std::collections::HashMap;
 
 struct Page {
@@ -160,7 +160,7 @@ impl Engine {
 
     pub fn text(&mut self, _id: BrowserId, _text: String) {}
 
-    pub fn take_frame(&mut self, _id: BrowserId) -> Option<Frame> {
+    pub fn take_frame(&mut self, _id: BrowserId) -> Option<()> {
         None
     }
 }

@@ -9,4 +9,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "LiquidBounce-Addon-Wry"
+rootProject.name = "LiquidBounce-Addon-DroidBridge"

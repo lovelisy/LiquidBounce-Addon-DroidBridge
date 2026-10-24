@@ -5,28 +5,23 @@ import net.ccbluex.liquidbounce.integration.backend.BrowserBackendProvider
 import org.apache.logging.log4j.LogManager
 
 /**
- * Offers the web view of the system, through Wry, as the browser of the client's interface, next to Chromium.
+ * Shows the client's interface with the web view of Android, on top of the game.
  */
 class WryAddon : LiquidBounceAddon() {
 
     override fun onInitialize() {
         if (!WryNative.isSupported) {
-            LogManager.getLogger("LiquidBounce/Wry").warn(
-                "Wry has no library for ${System.getProperty("os.name")} on ${System.getProperty("os.arch")}"
+            LogManager.getLogger("LiquidBounce/DroidBridge").warn(
+                "DroidBridge has no library for ${System.getProperty("os.arch")}"
             )
             return
         }
 
-        val missing = WryNative.missingDependency
         registerBrowserBackend(
             BrowserBackendProvider(
-                "wry",
-                "Wry",
-                if (missing == null) {
-                    "The web view of your system, added by the Wry add-on."
-                } else {
-                    "Needs $missing"
-                },
+                "droidbridge",
+                "DroidBridge",
+                "The web view of Android, drawn on top of the game.",
                 create = ::WryBrowserBackend
             )
         )
