@@ -230,17 +230,18 @@ class WryBrowser internal constructor(
     }
 
     override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int) = native {
-        logger.debug("key down {}", keyCode)
+        logger.info("key down {} scan {} mods {}", keyCode, scanCode, modifiers)
         WryNative.focus(id)
         WryNative.key(id, true, keyCode, scanCode, modifiers)
     }
 
     override fun keyReleased(keyCode: Int, scanCode: Int, modifiers: Int) = native {
+        logger.info("key up {}", keyCode)
         WryNative.key(id, false, keyCode, scanCode, modifiers)
     }
 
     override fun charTyped(codepoint: Int) = native {
-        logger.debug("char {}", codepoint)
+        logger.info("char {}", codepoint)
         when (codepoint) {
             0x08 -> {
                 WryNative.focus(id)
@@ -248,7 +249,7 @@ class WryBrowser internal constructor(
             }
             0x0A, 0x0D -> WryNative.enter(id)
             else -> if (codepoint < 0x20 || codepoint == 0x7F) {
-                logger.debug("char {} dropped", codepoint)
+                logger.info("char {} dropped", codepoint)
             } else {
                 WryNative.focus(id)
                 WryNative.text(id, String(Character.toChars(codepoint)))

@@ -140,6 +140,42 @@ public final class WryBridge {
                     + "})())";
 
     /**
+     * Everything of the theme is drawn at this fraction of the size it asks for.
+     */
+    private static final float FIT = 0.6f;
+
+    /**
+     * The pages are laid out for a desktop, where a pixel of the viewport is a pixel on the screen.
+     * Android gives the page 805 css pixels for a 1610 pixel wide screen, so the fixed sizes the
+     * theme uses - a 250 pixel wide panel, a 200% hud - end up far larger than the screen can show
+     * comfortably. The page is scaled down again here, per route, because every route of the theme
+     * is sized differently.
+     */
+    private static final String SCALE =
+            "(function(){"
+                    + "if(window.__wryScale){return 'already';}"
+                    + "window.__wryScale=true;"
+                    + "var FIT=" + FIT + ";"
+                    + "var route=location.hash||'';"
+                    + "var css='';"
+                    + "if(route.indexOf('/clickgui')>=0){"
+                    + "css+='.panel{width:'+Math.round(250*FIT)+'px!important;}';"
+                    + "css+='.scaled-clickgui-content{transform:scale('+Math.round(FIT*100)+'%)!important;"
+                    + "width:'+Math.round(100/FIT)+'vw!important;height:'+Math.round(100/FIT)+'vh!important;}';"
+                    + "css+='.clickgui .panel .modules{max-height:'+Math.round(545*FIT)+'px!important;}';"
+                    + "}else if(route.indexOf('/hud')>=0||route.indexOf('/inventory')>=0){"
+                    + "css+='.hud{zoom:'+Math.round(FIT*100)+'%!important;}';"
+                    + "}else{"
+                    + "css+='.menu{zoom:'+Math.round(FIT*100)+'%!important;}';"
+                    + "}"
+                    + "var style=document.createElement('style');"
+                    + "style.id='wry-scale';"
+                    + "style.textContent=css;"
+                    + "document.head.appendChild(style);"
+                    + "return route+' '+Math.round(FIT*100)+'% '+css.length;"
+                    + "})()";
+
+    /**
      * Stays in the page, so a pointer event only sends its coordinates instead of the whole handler.
      * Coordinates are fractions of the viewport, as everywhere else in the bridge.
      */
@@ -286,6 +322,12 @@ public final class WryBridge {
                     }
                     target.evaluateJavascript(DISPATCH, null);
                     target.evaluateJavascript(MASKS, null);
+                    target.evaluateJavascript(SCALE, new ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String value) {
+                            log("scale " + value);
+                        }
+                    });
                     target.evaluateJavascript(PROBE, new ValueCallback<String>() {
                         @Override
                         public void onReceiveValue(String value) {
@@ -567,7 +609,10 @@ public final class WryBridge {
                 + "if(scrollable){"
                 + "found=true;"
                 + "var before=t.scrollTop;"
+                + "var smooth=getComputedStyle(t).scrollBehavior;"
+                + "if(smooth!=='auto'){t.style.scrollBehavior='auto';}"
                 + "t.scrollTop=before+dy;"
+                + "if(smooth!=='auto'){t.style.scrollBehavior=smooth;}"
                 + "if(t.scrollTop!==before){moved=t.tagName+' '+before+'->'+t.scrollTop;break;}"
                 + "var room=dy>0?(t.scrollHeight-t.clientHeight-before):before;"
                 + "if(room<=0){moved=t.tagName+' at '+(dy>0?'end':'start');}"
