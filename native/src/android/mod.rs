@@ -66,6 +66,7 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| "the Android bridge is not running".to_string())?;
         let report = bridge.create(&options.url)?;
+        api::info(format!("[Wry] browser {id} asked for {} ({}x{})", options.url, options.width, options.height));
         api::info(format!("[Wry] {report}"));
         Ok(id)
     }
@@ -79,11 +80,13 @@ impl Engine {
         }
     }
 
-    pub fn set_visible(&mut self, _id: BrowserId, visible: bool) {
-        if let Some(bridge) = self.bridge.as_ref() {
-            if let Err(error) = bridge.set_visible(visible) {
-                api::warn(format!("[Wry] setting the webview visibility failed: {error}"));
-            }
+    pub fn set_visible(&mut self, id: BrowserId, visible: bool) {
+        api::info(format!("[Wry] browser {id} visibility {visible}"));
+        let Some(bridge) = self.bridge.as_ref() else {
+            return;
+        };
+        if let Err(error) = bridge.set_visible(visible) {
+            api::warn(format!("[Wry] setting the webview visibility failed: {error}"));
         }
     }
 

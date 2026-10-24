@@ -271,8 +271,8 @@ impl Bridge {
             env.call_static_method(
                 class,
                 "key",
-                "(ZI)V",
-                &[JValue::Bool(pressed as u8), JValue::Int(keycode)],
+                "(IZ)V",
+                &[JValue::Int(keycode), JValue::Bool(pressed as u8)],
             ),
             "WryBridge.key"
         );

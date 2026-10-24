@@ -106,8 +106,14 @@ public final class WryBridge {
         main.post(new Runnable() {
             @Override
             public void run() {
-                if (webView != null) {
-                    webView.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+                OverlayWebView view = webView;
+                if (view == null) {
+                    return;
+                }
+                view.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+                if (visible) {
+                    view.bringToFront();
+                    view.requestFocus();
                 }
             }
         });
