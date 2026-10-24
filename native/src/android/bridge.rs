@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 
 const DEX: &[u8] = include_bytes!("../../android-bridge.dex");
-const CLASS: &str = "net.ccbluex.liquidbounce.wry.android.WryBridge";
+const CLASS: &str = "liquidbounce.DroidBridge.WryBridge";
 const FOLDER: &str = "liquidbounce-droidbridge";
 
 macro_rules! jni {
@@ -319,6 +319,22 @@ impl Bridge {
                 &[JValue::Long(id), JValue::Object(&text)],
             ),
             "WryBridge.text"
+        );
+
+        Ok(())
+    }
+
+    pub fn enter(&self, id: i64) -> api::Result<()> {
+        let mut env = self
+            .vm
+            .attach_current_thread_permanently()
+            .map_err(|error| format!("attaching to ART failed: {error}"))?;
+
+        let class = unsafe { JClass::from_raw(self.class.as_raw()) };
+        jni!(
+            env,
+            env.call_static_method(class, "enter", "(J)V", &[JValue::Long(id)]),
+            "WryBridge.enter"
         );
 
         Ok(())

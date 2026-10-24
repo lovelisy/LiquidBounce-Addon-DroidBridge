@@ -167,6 +167,15 @@ impl Engine {
         }
     }
 
+    pub fn enter(&mut self, id: BrowserId) {
+        let Some(bridge) = self.bridge.as_ref() else {
+            return;
+        };
+        if let Err(error) = bridge.enter(id as i64) {
+            api::warn(format!("[Wry] forwarding enter failed: {error}"));
+        }
+    }
+
     pub fn take_frame(&mut self, _id: BrowserId) -> Option<()> {
         None
     }

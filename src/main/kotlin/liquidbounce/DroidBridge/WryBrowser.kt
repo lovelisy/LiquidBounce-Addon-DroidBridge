@@ -1,4 +1,4 @@
-package net.ccbluex.liquidbounce.wry
+package liquidbounce.DroidBridge
 
 import net.ccbluex.liquidbounce.integration.backend.BrowserTexture
 import net.ccbluex.liquidbounce.integration.backend.browser.Browser
@@ -230,6 +230,7 @@ class WryBrowser internal constructor(
     }
 
     override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int) = native {
+        logger.debug("key down {}", keyCode)
         WryNative.focus(id)
         WryNative.key(id, true, keyCode, scanCode, modifiers)
     }
@@ -239,8 +240,20 @@ class WryBrowser internal constructor(
     }
 
     override fun charTyped(codepoint: Int) = native {
-        WryNative.focus(id)
-        WryNative.text(id, String(Character.toChars(codepoint)))
+        logger.debug("char {}", codepoint)
+        when (codepoint) {
+            0x08 -> {
+                WryNative.focus(id)
+                WryNative.text(id, "\b")
+            }
+            0x0A, 0x0D -> WryNative.enter(id)
+            else -> if (codepoint < 0x20 || codepoint == 0x7F) {
+                logger.debug("char {} dropped", codepoint)
+            } else {
+                WryNative.focus(id)
+                WryNative.text(id, String(Character.toChars(codepoint)))
+            }
+        }
     }
 
     private inline fun native(action: () -> Unit) {

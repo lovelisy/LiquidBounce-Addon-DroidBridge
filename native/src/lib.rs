@@ -1,4 +1,4 @@
-//! The web view of Android, called from `net.ccbluex.liquidbounce.wry.WryNative`.
+//! The web view of Android, called from `liquidbounce.DroidBridge.WryNative`.
 
 pub mod api;
 
@@ -51,7 +51,7 @@ fn string(env: &mut JNIEnv, value: &JString) -> api::Result<String> {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_start(mut env: JNIEnv, _: JClass, data_dir: JString,
+pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_start(mut env: JNIEnv, _: JClass, data_dir: JString,
     _gpu_frames: jboolean, _render_node: JString, _formats: JLongArray) {
     guard(&mut env, |env| {
         let mut shared = engine();
@@ -65,7 +65,7 @@ pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_start(mut env
 }
 
 #[no_mangle]
-pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_stop(mut env: JNIEnv, _: JClass) {
+pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_stop(mut env: JNIEnv, _: JClass) {
     guard(&mut env, |_| {
         let engine = engine().0.take();
         if let Some(mut engine) = engine {
@@ -76,7 +76,7 @@ pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_stop(mut env:
 }
 
 #[no_mangle]
-pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_update(mut env: JNIEnv, _: JClass) {
+pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_update(mut env: JNIEnv, _: JClass) {
     with_engine(&mut env, |engine, _| {
         engine.update();
         Ok(())
@@ -84,7 +84,7 @@ pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_update(mut en
 }
 
 #[no_mangle]
-pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_createBrowser(mut env: JNIEnv, _: JClass, url: JString,
+pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_createBrowser(mut env: JNIEnv, _: JClass, url: JString,
     width: jint, height: jint, zoom: jdouble, incognito: jboolean, fps: jint) -> jlong {
     with_engine(&mut env, |engine, env| {
         let options = api::BrowserOptions {
@@ -113,23 +113,23 @@ macro_rules! browser_call {
     };
 }
 
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_closeBrowser() => |engine, env, id| engine.close_browser(id));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_setVisible(visible: jboolean) => |engine, env, id| engine.set_visible(id, visible != 0));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_navigate(url: JString) => |engine, env, id| {
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_closeBrowser() => |engine, env, id| engine.close_browser(id));
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_setVisible(visible: jboolean) => |engine, env, id| engine.set_visible(id, visible != 0));
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_navigate(url: JString) => |engine, env, id| {
     let url = string(env, &url)?;
     engine.navigate(id, url)
 });
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_reload(ignore_cache: jboolean) => |engine, env, id|
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_reload(ignore_cache: jboolean) => |engine, env, id|
     engine.reload(id, ignore_cache != 0));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_goBack() => |engine, env, id| engine.go_back(id));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_goForward() => |engine, env, id| engine.go_forward(id));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_resize(width: jint, height: jint, zoom: jdouble) =>
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_goBack() => |engine, env, id| engine.go_back(id));
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_goForward() => |engine, env, id| engine.go_forward(id));
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_resize(width: jint, height: jint, zoom: jdouble) =>
     |engine, env, id| engine.resize(id, width.max(1) as u32, height.max(1) as u32, zoom));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_setFps(fps: jint) => |engine, env, id|
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_setFps(fps: jint) => |engine, env, id|
     engine.set_fps(id, fps.max(1) as u32));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_mouseMove(x: jdouble, y: jdouble) => |engine, env, id|
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_mouseMove(x: jdouble, y: jdouble) => |engine, env, id|
     engine.pointer(id, x, y, Pointer::Move));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_mouseButton(x: jdouble, y: jdouble, button: jint,
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_mouseButton(x: jdouble, y: jdouble, button: jint,
     pressed: jboolean) => |engine, env, id| {
     let button = match button {
         1 => MouseButton::Middle,
@@ -138,26 +138,27 @@ browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_mouseButton(x: jdouble
     };
     engine.pointer(id, x, y, Pointer::Button(button, pressed != 0))
 });
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_mouseScroll(x: jdouble, y: jdouble, steps: jdouble) =>
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_mouseScroll(x: jdouble, y: jdouble, steps: jdouble) =>
     |engine, env, id| engine.pointer(id, x, y, Pointer::Scroll(steps)));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_focus() => |engine, env, id| engine.focus(id));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_key(pressed: jboolean, keycode: jint, scancode: jint,
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_focus() => |engine, env, id| engine.focus(id));
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_key(pressed: jboolean, keycode: jint, scancode: jint,
     modifiers: jint) => |engine, env, id| engine.key(id, Key { pressed: pressed != 0, keycode, scancode, modifiers }));
-browser_call!(Java_net_ccbluex_liquidbounce_wry_WryNative_text(text: JString) => |engine, env, id| {
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_text(text: JString) => |engine, env, id| {
     let text = string(env, &text)?;
     engine.text(id, text)
 });
+browser_call!(Java_liquidbounce_DroidBridge_WryNative_enter() => |engine, env, id| engine.enter(id));
 
 /// Events since the last call as `WryEvent`s, or null when there are none.
 #[no_mangle]
-pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_pollEvents(mut env: JNIEnv, _: JClass) -> jobjectArray {
+pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_pollEvents(mut env: JNIEnv, _: JClass) -> jobjectArray {
     guard(&mut env, |env| {
         let events = api::take_events();
         if events.is_empty() {
             return Ok(std::ptr::null_mut());
         }
         let err = |e: jni::errors::Error| e.to_string();
-        let class = env.find_class("net/ccbluex/liquidbounce/wry/WryEvent").map_err(err)?;
+        let class = env.find_class("liquidbounce/DroidBridge/WryEvent").map_err(err)?;
         let array = env.new_object_array(events.len() as i32, &class, JObject::null()).map_err(err)?;
         for (index, event) in events.into_iter().enumerate() {
             let text = env.new_string(event.text).map_err(err)?;
@@ -180,7 +181,7 @@ pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_pollEvents(mu
 
 /// The page is drawn by the system web view straight onto the game surface, so there is never a frame to hand out.
 #[no_mangle]
-pub extern "system" fn Java_net_ccbluex_liquidbounce_wry_WryNative_takeFrame(mut env: JNIEnv, _: JClass, id: jlong,
+pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_takeFrame(mut env: JNIEnv, _: JClass, id: jlong,
     out: JLongArray) -> jint {
     with_engine(&mut env, |engine, env| {
         let _ = engine.take_frame(id as api::BrowserId);

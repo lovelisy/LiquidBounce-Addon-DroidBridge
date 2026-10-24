@@ -25,7 +25,7 @@ events and are replayed into the page, which keeps the page's coordinates and th
 |---|---|
 | `src/main/kotlin` | The browser backend of the client: one web view per browser tab |
 | `native/src` | Rust, drives the web view through JNI |
-| `src/android-bridge` | Java, runs on the Android side of the same process and touches the web view on its main thread |
+| `src/DroidBridge` | Java, runs on the Android side of the same process and touches the web view on its main thread |
 | `src/main/resources/natives` | The Rust library, put into the jar by CI |
 
 The game runs on the JVM, which cannot create a web view. The native library therefore finds the Android runtime of

@@ -1,4 +1,4 @@
-package net.ccbluex.liquidbounce.wry.android;
+package liquidbounce.DroidBridge;
 
 import android.app.Activity;
 import android.app.Application;
@@ -7,7 +7,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.InputDevice;
-import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -158,24 +157,6 @@ public final class WryBridge {
                     + "return 'ready';})()";
 
     /**
-     * A wheel event of its own, because the axis of a scroll event means something else to the web view.
-     */
-    private static final String WHEEL_DEFINE =
-            "window.__wryWheel=function(fx,fy,dy){"
-                    + "var bx=fx*window.innerWidth,by=fy*window.innerHeight;"
-                    + "var t=document.elementFromPoint(bx,by)||document.body;"
-                    + "var o={bubbles:true,cancelable:true,view:window,deltaX:0,deltaY:dy,deltaMode:0,"
-                    + "clientX:bx,clientY:by,screenX:bx,screenY:by};"
-                    + "try{t.dispatchEvent(new WheelEvent('wheel',o));}catch(e){return 'no wheel';}"
-                    + "return t.tagName;};";
-
-    private static final String WHEEL =
-            "(function(){"
-                    + "if(window.__wryWheel){return 'already';}"
-                    + WHEEL_DEFINE
-                    + "return 'ready';})()";
-
-    /**
      * The body of the typing handler, called with the text that was typed.
      */
     private static final String INSERT_BODY =
@@ -282,12 +263,22 @@ public final class WryBridge {
                         entry.sent = false;
                     }
                     target.evaluateJavascript(DISPATCH, null);
-                    target.evaluateJavascript(WHEEL, null);
                     target.evaluateJavascript(MASKS, null);
                     target.evaluateJavascript(PROBE, new ValueCallback<String>() {
                         @Override
                         public void onReceiveValue(String value) {
                             log("page probe " + value);
+                        }
+                    });
+                    target.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            Page entry = PAGES.get(id);
+                            if (entry != null && !entry.drawn) {
+                                entry.drawn = true;
+                                log("browser " + id + " painted");
+                                show(entry);
+                            }
                         }
                     });
                 }
@@ -436,16 +427,34 @@ public final class WryBridge {
                 if (page == null || page.view == null) {
                     return;
                 }
-                page.view.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
-                if (visible) {
-                    String stacking = place(page.view);
-                    if (!"already above the surface".equals(stacking)) {
-                        log("restacked browser " + id + ": " + stacking);
-                    }
+                page.wanted = visible;
+                if (!visible) {
+                    page.view.setVisibility(View.INVISIBLE);
+                    return;
                 }
+                if (!page.loaded || !page.drawn) {
+                    log("browser " + id + " waits for the first draw (loaded " + page.loaded
+                            + ", drawn " + page.drawn + ")");
+                    return;
+                }
+                show(page);
             }
         });
         return "browser " + id + " visibility " + visible;
+    }
+
+    /**
+     * Shows the page only once it has painted, so the frame that appears is a page and not a blank view.
+     */
+    private static void show(Page page) {
+        if (!page.wanted || page.view == null || page.view.getVisibility() == View.VISIBLE) {
+            return;
+        }
+        page.view.setVisibility(View.VISIBLE);
+        String stacking = place(page.view);
+        if (!"already above the surface".equals(stacking)) {
+            log("restacked browser " + page.id + ": " + stacking);
+        }
     }
 
     public static void pointer(final long id, final float x, final float y, final int action,
@@ -527,16 +536,43 @@ public final class WryBridge {
      * the page instead, where the delta is what the page expects.
      */
     private static void scroll(Page page, OverlayWebView view, float x, float y, float amount) {
-        if (!view.isFocused()) {
-            view.requestFocus();
-        }
         float delta = -amount * WHEEL_STEP;
         if (delta == 0f) {
             return;
         }
         page.remember(x, y);
-        view.evaluateJavascript("if(!window.__wryWheel){" + WHEEL_DEFINE + "}"
-                + "window.__wryWheel(" + x + "," + y + "," + delta + ")", null);
+        String body = "var bx=" + x + "*window.innerWidth,by=" + y + "*window.innerHeight;"
+                + "var t=document.elementFromPoint(bx,by);"
+                + "var dy=" + delta + ";"
+                + "var moved=null;"
+                + "var found=false;"
+                + "while(t&&t!==document.body&&t!==document.documentElement){"
+                + "var style=getComputedStyle(t);"
+                + "var scrollable=(style.overflowY==='auto'||style.overflowY==='scroll')"
+                + "&&t.scrollHeight>t.clientHeight;"
+                + "if(scrollable){"
+                + "found=true;"
+                + "var before=t.scrollTop;"
+                + "t.scrollTop=before+dy;"
+                + "if(t.scrollTop!==before){moved=t.tagName+' '+before+'->'+t.scrollTop;break;}"
+                + "var room=dy>0?(t.scrollHeight-t.clientHeight-before):before;"
+                + "if(room<=0){moved=t.tagName+' at '+(dy>0?'end':'start');}"
+                + "break;}"
+                + "t=t.parentElement;}"
+                + "if(!moved&&!found){"
+                + "if(document.scrollingElement){"
+                + "var root=document.scrollingElement;"
+                + "var was=root.scrollTop;"
+                + "root.scrollTop=was+dy;"
+                + "moved='root '+was+'->'+root.scrollTop;"
+                + "}else{window.scrollBy(0,dy);moved='window';}}"
+                + "return moved;";
+        view.evaluateJavascript("(function(){" + body + "})()", new ValueCallback<String>() {
+            @Override
+            public void onReceiveValue(String value) {
+                log("wheel browser " + page.id + " amount " + amount + " delta " + delta + " -> " + value);
+            }
+        });
     }
 
     private static boolean mouse(OverlayWebView view, int type, float x, float y) {
@@ -617,12 +653,71 @@ public final class WryBridge {
                     return;
                 }
                 int code = keycode(keycode);
-                if (code == 0) {
+                if (code == 0 || !pressed) {
                     return;
                 }
-                page.view.dispatchKeyEvent(new KeyEvent(
-                        pressed ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP,
-                        code));
+                if (code == ENTER) {
+                    enter(page);
+                    return;
+                }
+                edit(page, keycode);
+            }
+        });
+    }
+
+    /**
+     * Enter is raised in the page, because the fields that wait for it listen to the dom event and a
+     * key event of a web view without an input connection never becomes one.
+     */
+    private static void enter(Page page) {
+        String body = "var e=document.activeElement||document.body;"
+                + "var k={key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true,"
+                + "view:window};"
+                + "e.dispatchEvent(new KeyboardEvent('keydown',k));"
+                + "e.dispatchEvent(new KeyboardEvent('keypress',k));"
+                + "e.dispatchEvent(new KeyboardEvent('keyup',k));"
+                + "return e.tagName;";
+        page.view.evaluateJavascript("(function(){" + body + "})()", new ValueCallback<String>() {
+            @Override
+            public void onReceiveValue(String value) {
+                log("enter browser " + page.id + " -> " + value);
+            }
+        });
+    }
+
+    /**
+     * Backspace and delete are done in the page, because a key event does not edit a field of a web
+     * view that the system has never given an input connection.
+     */
+    private static void edit(Page page, int glfw) {
+        String body = "var e=document.activeElement;"
+                + "if(!e||e===document.body){return 'no field';}"
+                + "var editable=e.tagName==='INPUT'||e.tagName==='TEXTAREA'"
+                + "||e.isContentEditable||e.getAttribute('contenteditable')==='true';"
+                + "if(!editable){return 'not editable';}"
+                + "if(e.isContentEditable||e.getAttribute('contenteditable')==='true'){"
+                + (glfw == 259
+                    ? "var s=String(e.textContent||'');if(!s.length){return 'empty';}e.textContent=s.slice(0,-1);"
+                    : "return 'delete in rich text';")
+                + "}else{"
+                + "var v=e.value||'';"
+                + "var start=e.selectionStart;"
+                + "var end=e.selectionEnd;"
+                + "if(typeof start!=='number'){start=v.length;end=v.length;}"
+                + (glfw == 259
+                    ? "if(start===end){if(start===0){return 'at start';}start=start-1;}"
+                    : "if(start===end){if(end>=v.length){return 'at end';}end=end+1;}")
+                + "e.value=v.slice(0,start)+v.slice(end);"
+                + "e.selectionStart=start;"
+                + "e.selectionEnd=start;"
+                + "}"
+                + "e.dispatchEvent(new Event('input',{bubbles:true}));"
+                + "e.dispatchEvent(new Event('change',{bubbles:true}));"
+                + "return 'edited';";
+        page.view.evaluateJavascript("(function(){" + body + "})()", new ValueCallback<String>() {
+            @Override
+            public void onReceiveValue(String value) {
+                log("edit browser " + page.id + " glfw " + glfw + " -> " + value);
             }
         });
     }
@@ -641,9 +736,34 @@ public final class WryBridge {
                 if (page == null || page.view == null || page.view.getVisibility() != View.VISIBLE) {
                     return;
                 }
+                if ("\b".equals(value)) {
+                    log("text browser " + id + " backspace via char");
+                    edit(page, 259);
+                    return;
+                }
                 String quoted = "'" + value.replace("\\", "\\\\").replace("'", "\\'")
                         .replace("\n", "\\n").replace("\r", "\\r") + "'";
-                page.view.evaluateJavascript("(function(text){" + INSERT_BODY + "})(" + quoted + ")", null);
+                page.view.evaluateJavascript("(function(text){" + INSERT_BODY + "})(" + quoted + ")",
+                        new ValueCallback<String>() {
+                            @Override
+                            public void onReceiveValue(String result) {
+                                log("text browser " + id + " '" + value + "' -> " + result);
+                            }
+                        });
+            }
+        });
+    }
+
+    public static void enter(final long id) {
+        main.post(new Runnable() {
+            @Override
+            public void run() {
+                Page page = PAGES.get(id);
+                if (page == null || page.view == null || page.view.getVisibility() != View.VISIBLE) {
+                    return;
+                }
+                log("enter browser " + id + " from the text input");
+                enter(page);
             }
         });
     }
@@ -712,22 +832,18 @@ public final class WryBridge {
         }
     }
 
+    /**
+     * The keys the bridge handles itself, everything else goes to the input method of the system.
+     */
+    private static final int EDIT = -1;
+    private static final int ENTER = -2;
+
     private static int keycode(int glfw) {
         switch (glfw) {
-            case 256:
-                return KeyEvent.KEYCODE_ESCAPE;
-            case 262:
-                return KeyEvent.KEYCODE_DPAD_RIGHT;
-            case 263:
-                return KeyEvent.KEYCODE_DPAD_LEFT;
-            case 264:
-                return KeyEvent.KEYCODE_DPAD_DOWN;
-            case 265:
-                return KeyEvent.KEYCODE_DPAD_UP;
-            case 266:
-                return KeyEvent.KEYCODE_PAGE_UP;
-            case 267:
-                return KeyEvent.KEYCODE_PAGE_DOWN;
+            case 257:
+                return ENTER;
+            case 259:
+                return EDIT;
             default:
                 return 0;
         }
@@ -750,6 +866,8 @@ public final class WryBridge {
         final OverlayWebView view;
         final long id;
         volatile boolean loaded;
+        volatile boolean drawn;
+        volatile boolean wanted;
         boolean pressed;
         int pressedButton;
         int hovers;

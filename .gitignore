@@ -7,5 +7,5 @@ run/
 
 /native/target/
 /native/android-bridge.dex
-/src/android-bridge/classes/
-/src/android-bridge/dex/
+/src/DroidBridge/classes/
+/src/DroidBridge/dex/

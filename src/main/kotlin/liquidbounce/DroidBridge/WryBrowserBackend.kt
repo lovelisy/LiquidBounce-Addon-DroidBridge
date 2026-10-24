@@ -1,4 +1,4 @@
-package net.ccbluex.liquidbounce.wry
+package liquidbounce.DroidBridge
 
 import net.ccbluex.liquidbounce.config.ConfigSystem
 import net.ccbluex.liquidbounce.event.EventListener

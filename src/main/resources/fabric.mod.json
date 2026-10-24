@@ -16,7 +16,7 @@
   "environment": "client",
   "entrypoints": {
     "liquidbounce": [
-      "net.ccbluex.liquidbounce.wry.WryAddon"
+      "liquidbounce.DroidBridge.WryAddon"
     ]
   },
   "accessWidener": "liquidbounce-droidbridge.accesswidener",

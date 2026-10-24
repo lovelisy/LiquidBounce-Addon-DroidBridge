@@ -1,4 +1,4 @@
-package net.ccbluex.liquidbounce.wry
+package liquidbounce.DroidBridge
 
 import net.ccbluex.liquidbounce.features.addon.LiquidBounceAddon
 import net.ccbluex.liquidbounce.integration.backend.BrowserBackendProvider

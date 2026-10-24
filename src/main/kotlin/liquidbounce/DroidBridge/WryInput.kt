@@ -1,4 +1,4 @@
-package net.ccbluex.liquidbounce.wry
+package liquidbounce.DroidBridge
 
 import com.mojang.blaze3d.platform.InputConstants
 import com.mojang.blaze3d.platform.cursor.CursorType

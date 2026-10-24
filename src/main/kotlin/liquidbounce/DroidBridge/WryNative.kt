@@ -1,4 +1,4 @@
-package net.ccbluex.liquidbounce.wry
+package liquidbounce.DroidBridge
 
 import java.io.File
 import java.security.MessageDigest
@@ -135,6 +135,9 @@ internal object WryNative {
 
     @JvmStatic
     external fun text(id: Long, text: String)
+
+    @JvmStatic
+    external fun enter(id: Long)
 
     @JvmStatic
     external fun pollEvents(): Array<WryEvent>?
