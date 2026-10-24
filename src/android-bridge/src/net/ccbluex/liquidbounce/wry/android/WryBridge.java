@@ -353,7 +353,6 @@ public final class WryBridge {
                     if (!"already above the surface".equals(stacking)) {
                         log("restacked browser " + id + ": " + stacking);
                     }
-                    page.view.requestFocus();
                 }
             }
         });
@@ -478,13 +477,33 @@ public final class WryBridge {
         boolean down = "down".equals(phase);
         boolean up = "up".equals(phase);
 
+        int detail = 1;
+        boolean twice = false;
+        if (down) {
+            long now = SystemClock.uptimeMillis();
+            twice = page.lastPress != 0L && domButton == 0 && page.lastButton == 0
+                    && now - page.lastPress < 500L
+                    && Math.abs(x - page.lastX) < 0.01f && Math.abs(y - page.lastY) < 0.01f;
+            detail = twice ? 2 : 1;
+            page.lastPress = now;
+            page.lastX = x;
+            page.lastY = y;
+            page.lastButton = domButton;
+            page.detail = detail;
+            page.doubleClick = twice;
+        } else if (up) {
+            detail = page.detail;
+            twice = page.doubleClick;
+            page.doubleClick = false;
+        }
+
         StringBuilder script = new StringBuilder("(function(){")
                 .append("var x=").append(x).append("*window.innerWidth,")
                 .append("y=").append(y).append("*window.innerHeight;")
                 .append("var t=document.elementFromPoint(x,y)||document.body;")
                 .append("var o={bubbles:true,cancelable:true,view:window,button:").append(domButton)
                 .append(",buttons:").append(up ? 0 : bit)
-                .append(",clientX:x,clientY:y,screenX:x,screenY:y")
+                .append(",clientX:x,clientY:y,screenX:x,screenY:y,detail:").append(detail)
                 .append(",pointerId:1,pointerType:'mouse',isPrimary:true,width:1,height:1,pressure:")
                 .append(up ? "0" : "0.5").append("};");
         if (down) {
@@ -498,6 +517,9 @@ public final class WryBridge {
                 script.append("t.dispatchEvent(new MouseEvent('contextmenu',o));");
             } else {
                 script.append("t.dispatchEvent(new MouseEvent('click',o));");
+                if (twice) {
+                    script.append("t.dispatchEvent(new MouseEvent('dblclick',o));");
+                }
             }
         } else {
             script.append("t.dispatchEvent(new PointerEvent('pointermove',o));")
@@ -642,6 +664,12 @@ public final class WryBridge {
         float pendingX;
         float pendingY;
         boolean hoverPosted;
+        long lastPress;
+        float lastX;
+        float lastY;
+        int lastButton;
+        int detail;
+        boolean doubleClick;
 
         Page(long id, OverlayWebView view) {
             this.id = id;
