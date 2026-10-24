@@ -7,6 +7,9 @@ pub struct Engine {
     bridge: Option<bridge::Bridge>,
     next: BrowserId,
     viewport: (u32, u32),
+    browser: BrowserId,
+    url: String,
+    announced: bool,
 }
 
 impl Engine {
@@ -15,7 +18,14 @@ impl Engine {
         let bridge = bridge::Bridge::attach(vm, &options.data_dir)?;
         let report = bridge.start()?;
         api::info(format!("[Wry] {report}"));
-        Ok(Self { bridge: Some(bridge), next: 1, viewport: (0, 0) })
+        Ok(Self {
+            bridge: Some(bridge),
+            next: 1,
+            viewport: (0, 0),
+            browser: 0,
+            url: String::new(),
+            announced: true,
+        })
     }
 
     pub fn stop(&mut self) {
@@ -26,12 +36,31 @@ impl Engine {
         }
     }
 
-    pub fn update(&mut self) {}
+    pub fn update(&mut self) {
+        if self.announced {
+            return;
+        }
+        let loaded = match self.bridge.as_ref() {
+            Some(bridge) => bridge.loaded(),
+            None => return,
+        };
+        match loaded {
+            Ok(true) => {
+                self.announced = true;
+                api::push_event(self.browser, api::EventKind::Loaded, 200, self.url.clone(), "");
+            }
+            Ok(false) => {}
+            Err(error) => api::warn(format!("[Wry] checking the page state failed: {error}")),
+        }
+    }
 
     pub fn create_browser(&mut self, options: BrowserOptions) -> api::Result<BrowserId> {
         let id = self.next;
         self.next += 1;
         self.viewport = (options.width, options.height);
+        self.browser = id;
+        self.url = options.url.clone();
+        self.announced = false;
         let bridge = self
             .bridge
             .as_ref()
@@ -42,6 +71,7 @@ impl Engine {
     }
 
     pub fn close_browser(&mut self, _id: BrowserId) {
+        self.announced = true;
         if let Some(bridge) = self.bridge.as_ref() {
             if let Err(error) = bridge.close() {
                 api::warn(format!("[Wry] closing the webview failed: {error}"));

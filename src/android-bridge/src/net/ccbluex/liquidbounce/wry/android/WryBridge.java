@@ -29,6 +29,7 @@ public final class WryBridge {
     private static volatile float pendingX;
     private static volatile float pendingY;
     private static volatile boolean hoverPosted;
+    private static volatile boolean loaded;
 
     private WryBridge() {
     }
@@ -68,13 +69,19 @@ public final class WryBridge {
     private static String add(Activity activity, String url) {
         try {
             detach();
+            loaded = false;
             long begin = System.nanoTime();
             OverlayWebView view = new OverlayWebView(activity);
             view.setBackgroundColor(0x00000000);
             view.getSettings().setJavaScriptEnabled(true);
             view.getSettings().setDomStorageEnabled(true);
             view.getSettings().setSupportZoom(false);
-            view.setWebViewClient(new WebViewClient());
+            view.setWebViewClient(new WebViewClient() {
+                @Override
+                public void onPageFinished(WebView target, String page) {
+                    loaded = true;
+                }
+            });
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT);
@@ -197,6 +204,10 @@ public final class WryBridge {
         });
     }
 
+    public static boolean loaded() {
+        return loaded;
+    }
+
     public static String close() {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             detach();
@@ -256,6 +267,7 @@ public final class WryBridge {
         webView = null;
         pressed = false;
         hoverPosted = false;
+        loaded = false;
         if (view == null) {
             return;
         }
