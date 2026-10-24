@@ -155,11 +155,11 @@ class WryBrowser internal constructor(
      * never asked, so it is shown whenever a client screen is open.
      */
     private fun pushVisible() {
+        val clientScreen = ScreenManager.isClientScreen(mc.gui.screen())
         val show = if (priority > 0 || inputListener != null) {
-            ScreenManager.isClientScreen(mc.gui.screen()) &&
-                (visible || ScreenManager.mainBrowser === this)
+            clientScreen && (visible || ScreenManager.mainBrowser === this)
         } else {
-            visible && isOverlayWanted()
+            visible && (clientScreen || mc.player != null)
         }
         if (show == shownScreen) {
             return
@@ -167,12 +167,6 @@ class WryBrowser internal constructor(
         shownScreen = show
         onRenderThread { WryNative.setVisible(id, show) }
     }
-
-    /**
-     * The HUD is an overlay, so unlike the main tab it belongs to the world rather than to a client
-     * screen and stays up while no screen is open.
-     */
-    private fun isOverlayWanted() = ScreenManager.isClientScreen(mc.gui.screen()) || mc.player != null
 
     /**
      * Pushes what the game tells the web view this frame.

@@ -22,15 +22,17 @@ final class WryPage {
 
     volatile boolean wanted;
 
+    volatile boolean resumed = true;
+
     boolean pressed;
 
     int pressedButton;
 
-    float pendingX;
+    volatile float pendingX;
 
-    float pendingY;
+    volatile float pendingY;
 
-    boolean hoverPosted;
+    volatile boolean hoverPosted;
 
     long lastPress;
 

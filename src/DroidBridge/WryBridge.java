@@ -50,7 +50,10 @@ public final class WryBridge {
                 }
                 page.wanted = visible;
                 if (!visible) {
-                    page.view.setVisibility(android.view.View.INVISIBLE);
+                    if (page.view.getVisibility() != android.view.View.INVISIBLE) {
+                        page.view.setVisibility(android.view.View.INVISIBLE);
+                        WryStack.pause(page);
+                    }
                     return;
                 }
                 if (!page.loaded || !page.drawn) {
@@ -64,32 +67,33 @@ public final class WryBridge {
 
     public static void pointer(final long id, final float x, final float y, final int action,
                                final int button, final float amount) {
+        final WryPage page = WryStack.page(id);
+        if (page == null || page.view == null) {
+            return;
+        }
+        if (action == 0) {
+            page.pendingX = x;
+            page.pendingY = y;
+            if (page.hoverPosted) {
+                return;
+            }
+            page.hoverPosted = true;
+            WryPages.main().post(new Runnable() {
+                @Override
+                public void run() {
+                    page.hoverPosted = false;
+                    WryInput.pointer(page, page.pendingX, page.pendingY, 0, 0, 0f);
+                }
+            });
+            return;
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            WryInput.pointer(page, x, y, action, button, amount);
+            return;
+        }
         WryPages.main().post(new Runnable() {
             @Override
             public void run() {
-                final WryPage page = WryStack.page(id);
-                if (page == null || page.view == null) {
-                    return;
-                }
-                if (action == 0 && !page.pressed) {
-                    page.pendingX = x;
-                    page.pendingY = y;
-                    if (!page.hoverPosted) {
-                        page.hoverPosted = true;
-                        WryPages.main().post(new Runnable() {
-                            @Override
-                            public void run() {
-                                WryPage current = WryStack.page(id);
-                                if (current == null || current.view == null) {
-                                    return;
-                                }
-                                current.hoverPosted = false;
-                                WryInput.pointer(current, current.pendingX, current.pendingY, 0, 0, 0f);
-                            }
-                        });
-                    }
-                    return;
-                }
                 WryInput.pointer(page, x, y, action, button, amount);
             }
         });

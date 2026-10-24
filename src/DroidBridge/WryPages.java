@@ -128,6 +128,7 @@ final class WryPages {
         if (parent != null) {
             parent.removeView(page.view);
         }
+        WryInput.forget(page.view);
         page.view.destroy();
     }
 

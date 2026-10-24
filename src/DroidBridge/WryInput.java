@@ -4,6 +4,9 @@ import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Turns the input of the game into events for a page.
  *
@@ -148,25 +151,70 @@ final class WryInput {
         view.evaluateJavascript("(function(){" + WryScripts.wheel(x, y, delta) + "})()", null);
     }
 
+    /**
+     * A hover is a move of the mouse over a page that does not take a click, so the same spot does
+     * not have to be sent twice. The objects of the event are kept instead of being built for every
+     * move, which is what the page receives on every frame while the pointer is over it.
+     */
+    private static final class Hover {
+
+        private final MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
+
+        private final MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
+
+        private final MotionEvent.PointerProperties[] singleProperties = {properties};
+
+        private final MotionEvent.PointerCoords[] singleCoords = {coords};
+
+        private float lastX;
+
+        private float lastY;
+
+        private boolean sent;
+
+        private Hover() {
+            properties.id = 0;
+            properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
+        }
+    }
+
+    private static final Map<WryView, Hover> HOVERS = new HashMap<>();
+
+    static void forget(WryView view) {
+        HOVERS.remove(view);
+    }
+
     private static boolean mouse(WryView view, int type, float x, float y) {
-        long now = SystemClock.uptimeMillis();
-        MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
-        properties.id = 0;
-        properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
-        MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
-        coords.x = x * view.getWidth();
-        coords.y = y * view.getHeight();
-        MotionEvent event = MotionEvent.obtain(now, now, type, 1,
-                new MotionEvent.PointerProperties[]{properties},
-                new MotionEvent.PointerCoords[]{coords},
-                0, 0, 1.0f, 1.0f, 0, 0,
-                InputDevice.SOURCE_MOUSE, 0);
+        Hover hover = HOVERS.get(view);
+        if (hover == null) {
+            hover = new Hover();
+            HOVERS.put(view, hover);
+        }
+        int width = view.getWidth();
+        int height = view.getHeight();
+        float px = x * width;
+        float py = y * height;
+        if (hover.sent && px == hover.lastX && py == hover.lastY) {
+            return false;
+        }
+        hover.sent = true;
+        hover.lastX = px;
+        hover.lastY = py;
+        hover.coords.x = px;
+        hover.coords.y = py;
         if (!view.isFocused()) {
             view.requestFocus();
         }
-        boolean accepted = view.inject(event);
-        event.recycle();
-        return accepted;
+        long now = SystemClock.uptimeMillis();
+        MotionEvent event = MotionEvent.obtain(now, now, type, 1,
+                hover.singleProperties, hover.singleCoords,
+                0, 0, 1.0f, 1.0f, 0, 0,
+                InputDevice.SOURCE_MOUSE, 0);
+        try {
+            return view.inject(event);
+        } finally {
+            event.recycle();
+        }
     }
 
     /**
@@ -207,12 +255,11 @@ final class WryInput {
         }
         page.remember(x, y);
 
-        StringBuilder script = new StringBuilder("if(!window.__wry){")
-                .append(WryScripts.DISPATCH)
-                .append("}window.__wry('")
-                .append(phase).append("',").append(x).append(',').append(y)
-                .append(',').append(domButton).append(',').append(detail)
-                .append(',').append(up ? 0 : bit).append(')');
+        StringBuilder script = new StringBuilder(80);
+        script.append("window.__wry&&window.__wry('").append(phase).append("',")
+                .append(x).append(',').append(y).append(',')
+                .append(domButton).append(',').append(detail).append(',')
+                .append(up ? 0 : bit).append(')');
 
         view.evaluateJavascript(script.toString(), null);
     }
