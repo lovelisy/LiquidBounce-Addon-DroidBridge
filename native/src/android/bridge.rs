@@ -301,6 +301,29 @@ impl Bridge {
         Ok(())
     }
 
+    pub fn text(&self, id: i64, value: &str) -> api::Result<()> {
+        let mut env = self
+            .vm
+            .attach_current_thread_permanently()
+            .map_err(|error| format!("attaching to ART failed: {error}"))?;
+
+        let class = unsafe { JClass::from_raw(self.class.as_raw()) };
+        let text = jni!(env, env.new_string(value), "creating the typed text");
+        let text = JObject::from(text);
+        jni!(
+            env,
+            env.call_static_method(
+                class,
+                "text",
+                "(JLjava/lang/String;)V",
+                &[JValue::Long(id), JValue::Object(&text)],
+            ),
+            "WryBridge.text"
+        );
+
+        Ok(())
+    }
+
     pub fn loaded(&self, id: i64) -> api::Result<bool> {
         let mut env = self
             .vm

@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  android:
+  native:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     defaults:
@@ -72,7 +72,7 @@ jobs:
           path: natives/
 
   build:
-    needs: [ android ]
+    needs: [ native ]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

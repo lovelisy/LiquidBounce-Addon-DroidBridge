@@ -118,8 +118,92 @@ public final class WryBridge {
                     + "canvases:canvas.length,webgl2:gl};"
                     + "})())";
 
+    /**
+     * Stays in the page, so a pointer event only sends its coordinates instead of the whole handler.
+     * Coordinates are fractions of the viewport, as everywhere else in the bridge.
+     */
+    private static final String DISPATCH_DEFINE =
+            "window.__wry=function(phase,fx,fy,btn,detail,bit){"
+                    + "var bx=fx*window.innerWidth,by=fy*window.innerHeight;"
+                    + "var t=document.elementFromPoint(bx,by)||document.body;"
+                    + "var o={bubbles:true,cancelable:true,view:window,button:btn,buttons:bit,"
+                    + "clientX:bx,clientY:by,screenX:bx,screenY:by,detail:detail,"
+                    + "pointerId:1,pointerType:'mouse',isPrimary:true,width:1,height:1,"
+                    + "pressure:phase==='up'?0:0.5};"
+                    + "if(phase==='down'){"
+                    + "var target=t;"
+                    + "while(target&&target!==document.body){"
+                    + "if(target.tagName==='INPUT'||target.tagName==='TEXTAREA'" 
+                    + "||target.isContentEditable||target.getAttribute('contenteditable')==='true'){break;}"
+                    + "target=target.parentElement;}"
+                    + "if(target&&target!==document.body&&target.focus){"
+                    + "try{target.focus();}catch(e){}}"
+                    + "t.dispatchEvent(new PointerEvent('pointerdown',o));"
+                    + "t.dispatchEvent(new MouseEvent('mousedown',o));"
+                    + "}else if(phase==='up'){"
+                    + "t.dispatchEvent(new PointerEvent('pointerup',o));"
+                    + "t.dispatchEvent(new MouseEvent('mouseup',o));"
+                    + "if(btn===2){t.dispatchEvent(new MouseEvent('contextmenu',o));}"
+                    + "else{t.dispatchEvent(new MouseEvent('click',o));"
+                    + "if(detail>1){t.dispatchEvent(new MouseEvent('dblclick',o));}}"
+                    + "}else{"
+                    + "t.dispatchEvent(new PointerEvent('pointermove',o));"
+                    + "t.dispatchEvent(new MouseEvent('mousemove',o));}"
+                    + "return t.tagName;};";
+
+    private static final String DISPATCH =
+            "(function(){"
+                    + "if(window.__wry){return 'already';}"
+                    + DISPATCH_DEFINE
+                    + "return 'ready';})()";
+
+    /**
+     * A wheel event of its own, because the axis of a scroll event means something else to the web view.
+     */
+    private static final String WHEEL_DEFINE =
+            "window.__wryWheel=function(fx,fy,dy){"
+                    + "var bx=fx*window.innerWidth,by=fy*window.innerHeight;"
+                    + "var t=document.elementFromPoint(bx,by)||document.body;"
+                    + "var o={bubbles:true,cancelable:true,view:window,deltaX:0,deltaY:dy,deltaMode:0,"
+                    + "clientX:bx,clientY:by,screenX:bx,screenY:by};"
+                    + "try{t.dispatchEvent(new WheelEvent('wheel',o));}catch(e){return 'no wheel';}"
+                    + "return t.tagName;};";
+
+    private static final String WHEEL =
+            "(function(){"
+                    + "if(window.__wryWheel){return 'already';}"
+                    + WHEEL_DEFINE
+                    + "return 'ready';})()";
+
+    /**
+     * The body of the typing handler, called with the text that was typed.
+     */
+    private static final String INSERT_BODY =
+            "var e=document.activeElement;"
+                    + "if(!e||e===document.body){return 'no field';}"
+                    + "var editable=e.tagName==='INPUT'||e.tagName==='TEXTAREA'"
+                    + "||e.isContentEditable||e.getAttribute('contenteditable')==='true';"
+                    + "if(!editable){return 'not editable';}"
+                    + "if(e.isContentEditable||e.getAttribute('contenteditable')==='true'){e.textContent+=text;}"
+                    + "else{"
+                    + "var start=e.selectionStart;"
+                    + "var end=e.selectionEnd;"
+                    + "if(typeof start==='number'){"
+                    + "e.value=e.value.slice(0,start)+text+e.value.slice(end);"
+                    + "e.selectionStart=start+text.length;"
+                    + "e.selectionEnd=start+text.length;"
+                    + "}else{e.value+=text;}}"
+                    + "e.dispatchEvent(new Event('input',{bubbles:true}));"
+                    + "e.dispatchEvent(new Event('change',{bubbles:true}));"
+                    + "return e.tagName;";
+
     private static final Map<Long, Page> PAGES = new ConcurrentHashMap<>();
     private static final java.util.List<String> LOGS = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /**
+     * One wheel step in pixels of a page, the rough distance a mouse wheel covers in a browser.
+     */
+    private static final float WHEEL_STEP = 100f;
 
     private static Handler main;
     private static String dataSuffix;
@@ -195,7 +279,10 @@ public final class WryBridge {
                     Page entry = PAGES.get(id);
                     if (entry != null) {
                         entry.loaded = true;
+                        entry.sent = false;
                     }
+                    target.evaluateJavascript(DISPATCH, null);
+                    target.evaluateJavascript(WHEEL, null);
                     target.evaluateJavascript(MASKS, null);
                     target.evaluateJavascript(PROBE, new ValueCallback<String>() {
                         @Override
@@ -229,6 +316,8 @@ public final class WryBridge {
             view.setFocusable(true);
             view.setFocusableInTouchMode(true);
             view.setOnFocusChangeListener(null);
+            view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+            view.setOnClickListener(null);
             PAGES.put(id, new Page(id, view));
             view.loadUrl(url);
             long took = (System.nanoTime() - begin) / 1_000_000L;
@@ -423,7 +512,7 @@ public final class WryBridge {
     }
 
     private static void hover(Page page, OverlayWebView view, float x, float y) {
-        boolean accepted = mouse(view, MotionEvent.ACTION_HOVER_MOVE, x, y, 0f);
+        boolean accepted = mouse(view, MotionEvent.ACTION_HOVER_MOVE, x, y);
         if (page.hovers > 3) {
             return;
         }
@@ -433,12 +522,24 @@ public final class WryBridge {
                 + " size " + view.getWidth() + "x" + view.getHeight());
     }
 
+    /**
+     * The axis of a scroll event does not carry the steps the game reports, so the wheel is raised in
+     * the page instead, where the delta is what the page expects.
+     */
     private static void scroll(Page page, OverlayWebView view, float x, float y, float amount) {
-        boolean accepted = mouse(view, MotionEvent.ACTION_SCROLL, x, y, amount);
-        log("pointer browser " + page.id + " scroll " + amount + " accepted " + accepted);
+        if (!view.isFocused()) {
+            view.requestFocus();
+        }
+        float delta = -amount * WHEEL_STEP;
+        if (delta == 0f) {
+            return;
+        }
+        page.remember(x, y);
+        view.evaluateJavascript("if(!window.__wryWheel){" + WHEEL_DEFINE + "}"
+                + "window.__wryWheel(" + x + "," + y + "," + delta + ")", null);
     }
 
-    private static boolean mouse(OverlayWebView view, int type, float x, float y, float amount) {
+    private static boolean mouse(OverlayWebView view, int type, float x, float y) {
         long now = SystemClock.uptimeMillis();
         MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
         properties.id = 0;
@@ -446,9 +547,6 @@ public final class WryBridge {
         MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
         coords.x = x * view.getWidth();
         coords.y = y * view.getHeight();
-        if (type == MotionEvent.ACTION_SCROLL) {
-            coords.setAxisValue(MotionEvent.AXIS_VSCROLL, -amount);
-        }
         MotionEvent event = MotionEvent.obtain(now, now, type, 1,
                 new MotionEvent.PointerProperties[]{properties},
                 new MotionEvent.PointerCoords[]{coords},
@@ -495,46 +593,19 @@ public final class WryBridge {
             detail = page.detail;
             twice = page.doubleClick;
             page.doubleClick = false;
+        } else if (page.sameSpot(x, y)) {
+            return;
         }
+        page.remember(x, y);
 
-        StringBuilder script = new StringBuilder("(function(){")
-                .append("var x=").append(x).append("*window.innerWidth,")
-                .append("y=").append(y).append("*window.innerHeight;")
-                .append("var t=document.elementFromPoint(x,y)||document.body;")
-                .append("var o={bubbles:true,cancelable:true,view:window,button:").append(domButton)
-                .append(",buttons:").append(up ? 0 : bit)
-                .append(",clientX:x,clientY:y,screenX:x,screenY:y,detail:").append(detail)
-                .append(",pointerId:1,pointerType:'mouse',isPrimary:true,width:1,height:1,pressure:")
-                .append(up ? "0" : "0.5").append("};");
-        if (down) {
-            script.append("if(t.focus&&(t.tagName=='INPUT'||t.tagName=='TEXTAREA'||t.isContentEditable)){t.focus();}");
-            script.append("t.dispatchEvent(new PointerEvent('pointerdown',o));")
-                    .append("t.dispatchEvent(new MouseEvent('mousedown',o));");
-        } else if (up) {
-            script.append("t.dispatchEvent(new PointerEvent('pointerup',o));")
-                    .append("t.dispatchEvent(new MouseEvent('mouseup',o));");
-            if (domButton == 2) {
-                script.append("t.dispatchEvent(new MouseEvent('contextmenu',o));");
-            } else {
-                script.append("t.dispatchEvent(new MouseEvent('click',o));");
-                if (twice) {
-                    script.append("t.dispatchEvent(new MouseEvent('dblclick',o));");
-                }
-            }
-        } else {
-            script.append("t.dispatchEvent(new PointerEvent('pointermove',o));")
-                    .append("t.dispatchEvent(new MouseEvent('mousemove',o));");
-        }
-        script.append("return t.tagName;})( )");
+        StringBuilder script = new StringBuilder("if(!window.__wry){")
+                .append(DISPATCH_DEFINE)
+                .append("}window.__wry('")
+                .append(phase).append("',").append(x).append(',').append(y)
+                .append(',').append(domButton).append(',').append(detail)
+                .append(',').append(up ? 0 : bit).append(')');
 
-        view.evaluateJavascript(script.toString(), new ValueCallback<String>() {
-            @Override
-            public void onReceiveValue(String value) {
-                log("pointer browser " + page.id + " " + phase + " at "
-                        + (x * view.getWidth()) + "," + (y * view.getHeight())
-                        + " on " + value + " button " + button);
-            }
-        });
+        view.evaluateJavascript(script.toString(), null);
     }
 
     public static void key(final long id, final int keycode, final boolean pressed) {
@@ -552,6 +623,27 @@ public final class WryBridge {
                 page.view.dispatchKeyEvent(new KeyEvent(
                         pressed ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP,
                         code));
+            }
+        });
+    }
+
+    /**
+     * Puts text into the field the page has focused, the way typing would.
+     */
+    public static void text(final long id, final String value) {
+        if (value == null || value.isEmpty()) {
+            return;
+        }
+        main.post(new Runnable() {
+            @Override
+            public void run() {
+                Page page = PAGES.get(id);
+                if (page == null || page.view == null || page.view.getVisibility() != View.VISIBLE) {
+                    return;
+                }
+                String quoted = "'" + value.replace("\\", "\\\\").replace("'", "\\'")
+                        .replace("\n", "\\n").replace("\r", "\\r") + "'";
+                page.view.evaluateJavascript("(function(text){" + INSERT_BODY + "})(" + quoted + ")", null);
             }
         });
     }
@@ -670,10 +762,23 @@ public final class WryBridge {
         int lastButton;
         int detail;
         boolean doubleClick;
+        float sentX;
+        float sentY;
+        boolean sent;
 
         Page(long id, OverlayWebView view) {
             this.id = id;
             this.view = view;
+        }
+
+        boolean sameSpot(float x, float y) {
+            return sent && sentX == x && sentY == y;
+        }
+
+        void remember(float x, float y) {
+            sent = true;
+            sentX = x;
+            sentY = y;
         }
     }
 

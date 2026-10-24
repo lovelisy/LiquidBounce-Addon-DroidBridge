@@ -158,7 +158,14 @@ impl Engine {
         }
     }
 
-    pub fn text(&mut self, _id: BrowserId, _text: String) {}
+    pub fn text(&mut self, id: BrowserId, text: String) {
+        let Some(bridge) = self.bridge.as_ref() else {
+            return;
+        };
+        if let Err(error) = bridge.text(id as i64, &text) {
+            api::warn(format!("[Wry] forwarding typed text failed: {error}"));
+        }
+    }
 
     pub fn take_frame(&mut self, _id: BrowserId) -> Option<()> {
         None
