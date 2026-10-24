@@ -319,6 +319,38 @@ impl Bridge {
         Ok(value)
     }
 
+    pub fn poll_logs(&self) -> api::Result<Vec<String>> {
+        let mut env = self
+            .vm
+            .attach_current_thread_permanently()
+            .map_err(|error| format!("attaching to ART failed: {error}"))?;
+
+        let class = unsafe { JClass::from_raw(self.class.as_raw()) };
+        let array = jni!(
+            env,
+            env.call_static_method(class, "pollLogs", "()[Ljava/lang/String;", &[]),
+            "WryBridge.pollLogs"
+        )
+        .l()
+        .map_err(|error| format!("WryBridge.pollLogs returned nothing: {error}"))?;
+
+        let array = jni::objects::JObjectArray::from(array);
+        let length = env
+            .get_array_length(&array)
+            .map_err(|error| format!("reading the log count failed: {error}"))?;
+        let mut lines = Vec::with_capacity(length as usize);
+        for index in 0..length {
+            let element = env
+                .get_object_array_element(&array, index)
+                .map_err(|error| format!("reading a log line failed: {error}"))?;
+            let text = env
+                .get_string(&JString::from(element))
+                .map_err(|error| format!("decoding a log line failed: {error}"))?;
+            lines.push(text.into());
+        }
+        Ok(lines)
+    }
+
     fn activity<'a>(&self, mut env: &mut jni::JNIEnv<'a>) -> api::Result<JObject<'a>> {
         let thread = jni!(
             env,

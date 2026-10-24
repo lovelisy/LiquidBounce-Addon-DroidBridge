@@ -17,7 +17,6 @@ import net.ccbluex.liquidbounce.integration.backend.input.InputAcceptor
 import net.ccbluex.liquidbounce.integration.backend.input.InputHandler
 import net.ccbluex.liquidbounce.integration.backend.input.InputListener
 import net.ccbluex.liquidbounce.integration.screen.ScreenManager
-import net.ccbluex.liquidbounce.integration.screen.impl.CustomSharedMinecraftScreen
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.minecraft.client.gui.render.TextureSetup
 import org.apache.logging.log4j.LogManager
@@ -106,7 +105,7 @@ class WryBrowser internal constructor(
             }
         }
 
-    override var visible = false
+    override var visible = true
 
     private val renderer = BrowserRenderer(this)
     private val inputListener: InputListener? = inputAcceptor?.let { InputListener(this, this, it) }
@@ -172,13 +171,13 @@ class WryBrowser internal constructor(
         ")"
 
     /**
-     * Whether this tab currently owns the screen: either it asked to show itself, or it is the tab the
-     * screen manager paints every virtual screen through. The latter never sets [visible], it draws the
-     * tab into the game's own GUI, so the web view has to consider both.
+     * The web view is shown while a client screen owns the game, and hidden while the player is in the
+     * world. [visible] only tells whether the screen that owns this tab asked for it; the main tab is
+     * never asked, so it is shown whenever a client screen is open.
      */
     private fun pushVisible() {
-        val showsClientScreen = ScreenManager.screen != null || mc.gui.screen() is CustomSharedMinecraftScreen
-        val show = visible || (ScreenManager.mainBrowser === this && showsClientScreen)
+        val show = ScreenManager.isClientScreen(mc.gui.screen()) &&
+            (visible || ScreenManager.mainBrowser === this)
         if (show == shownScreen) {
             return
         }

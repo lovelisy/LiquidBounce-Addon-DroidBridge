@@ -39,6 +39,14 @@ impl Engine {
             Some(bridge) => bridge,
             None => return,
         };
+        match bridge.poll_logs() {
+            Ok(lines) => {
+                for line in lines {
+                    api::info(format!("[Wry] {line}"));
+                }
+            }
+            Err(error) => api::warn(format!("[Wry] reading the web view log failed: {error}")),
+        }
         for (id, page) in self.pages.iter_mut() {
             if page.announced {
                 continue;

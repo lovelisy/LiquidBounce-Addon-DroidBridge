@@ -24,9 +24,26 @@ import java.util.concurrent.TimeUnit;
 public final class WryBridge {
 
     private static final Map<Long, Page> PAGES = new ConcurrentHashMap<>();
+    private static final java.util.List<String> LOGS = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     private static Handler main;
     private static String dataSuffix;
+
+    static void log(String text) {
+        android.util.Log.i("WryBridge", text);
+        if (LOGS.size() < 200) {
+            LOGS.add(text);
+        }
+    }
+
+    public static String[] pollLogs() {
+        if (LOGS.isEmpty()) {
+            return new String[0];
+        }
+        String[] drained = LOGS.toArray(new String[0]);
+        LOGS.clear();
+        return drained;
+    }
 
     private WryBridge() {
     }
@@ -78,27 +95,94 @@ public final class WryBridge {
                     if (entry != null) {
                         entry.loaded = true;
                     }
+                    target.evaluateJavascript(
+                            "(function(){"
+                                    + "var d=document.createElement('div');"
+                                    + "d.style.maskImage='url(x)';"
+                                    + "var webkit=d.style.webkitMaskImage;"
+                                    + "d.style.maskImage='';"
+                                    + "d.style.webkitMaskImage='url(x)';"
+                                    + "var canvas=document.getElementsByTagName('canvas');"
+                                    + "var gl=null;"
+                                    + "try{gl=!!document.createElement('canvas').getContext('webgl2');}catch(e){gl='error';}"
+                                    + "var icons=document.getElementsByClassName('title-button-icon');"
+                                    + "var sample=icons.length?getComputedStyle(icons[0]).maskImage:'';"
+                                    + "return JSON.stringify({ua:navigator.userAgent,"
+                                    + "mask:d.style.maskImage,webkitMask:webkit,"
+                                    + "webkitApplied:d.style.webkitMaskImage,"
+                                    + "computed:sample,"
+                                    + "icons:icons.length,canvases:canvas.length,webgl2:gl});"
+                                    + "})()",
+                            value -> log("page probe " + value));
+                }
+
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView target, android.webkit.WebResourceRequest request) {
+                    return false;
+                }
+            });
+            view.setWebChromeClient(new android.webkit.WebChromeClient() {
+                @Override
+                public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
+                    if (message.messageLevel() != android.webkit.ConsoleMessage.MessageLevel.LOG) {
+                        log("console " + message.messageLevel() + " " + message.message()
+                                + " @" + message.sourceId() + ":" + message.lineNumber());
+                    }
+                    return true;
                 }
             });
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT);
             activity.addContentView(view, params);
-            view.bringToFront();
+            place(view);
             view.setVisibility(View.INVISIBLE);
-            view.setFocusableInTouchMode(false);
-            PAGES.put(id, new Page(view));
+            view.setFocusable(true);
+            view.setFocusableInTouchMode(true);
+            view.setOnFocusChangeListener(null);
+            PAGES.put(id, new Page(id, view));
             view.loadUrl(url);
             long took = (System.nanoTime() - begin) / 1_000_000L;
             ViewGroup parent = (ViewGroup) view.getParent();
             return "browser " + id + " added in " + took + " ms on " + Thread.currentThread().getName()
                     + ", provider " + WebView.getCurrentWebViewPackage()
                     + ", parent " + (parent == null ? "none" : parent.getClass().getName())
+                    + ", order " + (parent == null ? -1 : parent.indexOfChild(view)) + " of " + (parent == null ? -1 : parent.getChildCount())
                     + ", url " + url;
         } catch (Throwable error) {
-            PAGES.put(id, new Page(null));
+            PAGES.put(id, new Page(id, null));
             return "browser " + id + " failed: " + error;
         }
+    }
+
+    /**
+     * Keeps the page below the launcher's own overlays (cursor, buttons, menu) by stacking it right above
+     * the game surface instead of on top of everything.
+     */
+    private static void place(View view) {
+        ViewGroup parent = (ViewGroup) view.getParent();
+        if (parent == null) {
+            return;
+        }
+        int surface = -1;
+        for (int index = 0; index < parent.getChildCount(); index++) {
+            String name = parent.getChildAt(index).getClass().getName();
+            if (name.contains("TextureView") || name.contains("SurfaceView")) {
+                surface = index;
+                break;
+            }
+        }
+        if (surface < 0) {
+            return;
+        }
+        int current = parent.indexOfChild(view);
+        if (current == surface + 1) {
+            return;
+        }
+        ViewGroup.LayoutParams params = view.getLayoutParams();
+        parent.removeView(view);
+        int target = Math.min(surface + 1, parent.getChildCount());
+        parent.addView(view, target, params);
     }
 
     public static boolean loaded(final long id) {
@@ -116,7 +200,7 @@ public final class WryBridge {
                 }
                 page.view.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
                 if (visible) {
-                    page.view.bringToFront();
+                    place(page.view);
                     page.view.requestFocus();
                 }
             }
@@ -182,7 +266,17 @@ public final class WryBridge {
                 || type == MotionEvent.ACTION_MOVE
                 || type == MotionEvent.ACTION_UP;
         long eventDownTime = touch ? page.downTime : now;
-        int buttonState = touch ? buttonState(button) : 0;
+        int bit = buttonState(button);
+        int buttonState = 0;
+        int actionButton = 0;
+        if (type == MotionEvent.ACTION_DOWN) {
+            buttonState = bit;
+            actionButton = bit;
+        } else if (type == MotionEvent.ACTION_MOVE) {
+            buttonState = bit;
+        } else if (type == MotionEvent.ACTION_UP) {
+            actionButton = bit;
+        }
         MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
         properties.id = 0;
         properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
@@ -197,7 +291,34 @@ public final class WryBridge {
                 new MotionEvent.PointerCoords[]{coords},
                 0, buttonState, 1.0f, 1.0f, 0, 0,
                 InputDevice.SOURCE_MOUSE, 0);
+        event.setActionButton(actionButton);
+        if (!view.isFocused()) {
+            view.requestFocus();
+        }
         view.inject(event);
+        event.recycle();
+        log("pointer browser " + page.id + " " + typeName(type) + " at " + sx + "," + sy
+                + " button " + button + " actionButton " + actionButton
+                + " focused " + view.isFocused()
+                + " visible " + (view.getVisibility() == View.VISIBLE)
+                + " size " + view.getWidth() + "x" + view.getHeight());
+    }
+
+    private static String typeName(int type) {
+        switch (type) {
+            case MotionEvent.ACTION_DOWN:
+                return "down";
+            case MotionEvent.ACTION_UP:
+                return "up";
+            case MotionEvent.ACTION_MOVE:
+                return "move";
+            case MotionEvent.ACTION_HOVER_MOVE:
+                return "hover";
+            case MotionEvent.ACTION_SCROLL:
+                return "scroll";
+            default:
+                return Integer.toString(type);
+        }
     }
 
     public static void key(final long id, final int keycode, final boolean pressed) {
@@ -329,6 +450,7 @@ public final class WryBridge {
     private static final class Page {
 
         final OverlayWebView view;
+        final long id;
         volatile boolean loaded;
         boolean pressed;
         long downTime;
@@ -336,7 +458,8 @@ public final class WryBridge {
         float pendingY;
         boolean hoverPosted;
 
-        Page(OverlayWebView view) {
+        Page(long id, OverlayWebView view) {
+            this.id = id;
             this.view = view;
         }
     }
