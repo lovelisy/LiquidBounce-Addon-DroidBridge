@@ -22,8 +22,6 @@ final class WryPage {
 
     volatile boolean wanted;
 
-    volatile boolean resumed = true;
-
     boolean pressed;
 
     int pressedButton;

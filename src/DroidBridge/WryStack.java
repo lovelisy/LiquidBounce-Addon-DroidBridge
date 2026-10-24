@@ -233,36 +233,11 @@ final class WryStack {
      * view.
      */
     static void show(WryPage page) {
-        if (page.view == null || page.view.getVisibility() == View.VISIBLE) {
+        if (!page.wanted || page.view == null || page.view.getVisibility() == View.VISIBLE) {
             return;
         }
-        if (!page.wanted) {
-            return;
-        }
-        resume(page);
         page.view.setVisibility(View.VISIBLE);
         place(page.view);
-    }
-
-    private static void resume(WryPage page) {
-        if (page.resumed) {
-            return;
-        }
-        page.resumed = true;
-        page.view.onResume();
-    }
-
-    /**
-     * A page that is off screen is not drawn, but the web view keeps running the scripts and the
-     * animations of it. Pausing it once it has been shown keeps the pages that are not on screen
-     * from taking any work while the game draws.
-     */
-    static void pause(WryPage page) {
-        if (page.view == null || !page.resumed) {
-            return;
-        }
-        page.resumed = false;
-        page.view.onPause();
     }
 
     private WryStack() {

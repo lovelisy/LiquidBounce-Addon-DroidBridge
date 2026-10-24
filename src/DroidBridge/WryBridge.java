@@ -50,10 +50,7 @@ public final class WryBridge {
                 }
                 page.wanted = visible;
                 if (!visible) {
-                    if (page.view.getVisibility() != android.view.View.INVISIBLE) {
-                        page.view.setVisibility(android.view.View.INVISIBLE);
-                        WryStack.pause(page);
-                    }
+                    page.view.setVisibility(android.view.View.INVISIBLE);
                     return;
                 }
                 if (!page.loaded || !page.drawn) {
