@@ -111,7 +111,8 @@ public final class WryBridge {
             @Override
             public void run() {
                 OverlayWebView view = webView;
-                if (view == null || view.getWidth() <= 0 || view.getHeight() <= 0) {
+                if (view == null || view.getVisibility() != View.VISIBLE
+                        || view.getWidth() <= 0 || view.getHeight() <= 0) {
                     return;
                 }
                 float sx = x * view.getWidth();
@@ -153,7 +154,7 @@ public final class WryBridge {
             @Override
             public void run() {
                 OverlayWebView view = webView;
-                if (view == null) {
+                if (view == null || view.getVisibility() != View.VISIBLE) {
                     return;
                 }
                 int code = keycode(keycode);
@@ -175,7 +176,7 @@ public final class WryBridge {
             @Override
             public void run() {
                 OverlayWebView view = webView;
-                if (view == null) {
+                if (view == null || view.getVisibility() != View.VISIBLE) {
                     return;
                 }
                 if (characters == null) {
