@@ -1,9 +1,0 @@
-{
-  "required": true,
-  "package": "liquidbounce.DroidBridge.mixin",
-  "compatibilityLevel": "JAVA_25",
-  "client": [],
-  "injectors": {
-    "defaultRequire": 1
-  }
-}

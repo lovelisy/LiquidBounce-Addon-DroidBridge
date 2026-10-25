@@ -34,8 +34,5 @@
     "modmenu": {
       "parent": "liquidbounce"
     }
-  },
-  "mixins": [
-    "liquidbounce-droidbridge.mixins.json"
-  ]
+  }
 }
