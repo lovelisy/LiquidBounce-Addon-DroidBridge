@@ -347,48 +347,6 @@ final class WryScripts {
                 + "return 'edited';";
     }
 
-    /**
-     * The axis of a scroll event does not carry the steps the game reports, so the wheel is raised in
-     * the page instead, where the delta is what the page expects.
-     */
-    static String wheel(float x, float y, float delta) {
-        return "var bx=" + x + "*window.innerWidth,by=" + y + "*window.innerHeight;"
-                + "var t=document.elementFromPoint(bx,by);"
-                + "var dy=" + delta + ";"
-                + "var moved=null;"
-                + "var found=false;"
-                + "while(t&&t!==document.body&&t!==document.documentElement){"
-                + "var style=getComputedStyle(t);"
-                + "var scrollable=(style.overflowY==='auto'||style.overflowY==='scroll')"
-                + "&&t.scrollHeight>t.clientHeight;"
-                + "if(scrollable){"
-                + "found=true;"
-                + "var before=t.scrollTop;"
-                + "var smooth=getComputedStyle(t).scrollBehavior;"
-                + "if(smooth!=='auto'){t.style.scrollBehavior='auto';}"
-                + "t.scrollTop=before+dy;"
-                + "if(smooth!=='auto'){t.style.scrollBehavior=smooth;}"
-                + "if(t.scrollTop!==before){moved=t.tagName+' '+before+'->'+t.scrollTop;break;}"
-                + "var room=dy>0?(t.scrollHeight-t.clientHeight-before):before;"
-                + "if(room<=0){moved=t.tagName+' at '+(dy>0?'end':'start');}"
-                + "break;}"
-                + "t=t.parentElement;}"
-                + "if(!moved&&!found){"
-                + "if(document.scrollingElement){"
-                + "var root=document.scrollingElement;"
-                + "var was=root.scrollTop;"
-                + "root.scrollTop=was+dy;"
-                + "moved='root '+was+'->'+root.scrollTop;"
-                + "}else{window.scrollBy(0,dy);moved='window';}}"
-                + "var chain=[];"
-                + "var p=document.elementFromPoint(bx,by);"
-                + "while(p&&p!==document.documentElement){"
-                + "var s2=getComputedStyle(p);"
-                + "chain.push((p.className||p.tagName)+'[ov'+s2.overflowY+' '+p.clientHeight+'/'+p.scrollHeight+']');"
-                + "p=p.parentElement;}"
-                + "return (moved||'nothing')+' | hit '+chain.slice(0,4).join(' < ');";
-    }
-
     private WryScripts() {
     }
 }

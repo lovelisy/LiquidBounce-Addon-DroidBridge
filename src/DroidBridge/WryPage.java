@@ -26,6 +26,8 @@ final class WryPage {
 
     int pressedButton;
 
+    long pressedDownTime;
+
     volatile float pendingX;
 
     volatile float pendingY;

@@ -18,11 +18,6 @@ import java.util.Map;
 final class WryInput {
 
     /**
-     * One wheel step in pixels of a page, the rough distance a mouse wheel covers in a browser.
-     */
-    private static final float WHEEL_STEP = 100f;
-
-    /**
      * The keys the bridge handles itself, everything else goes to the input method of the system.
      */
     private static final int EDIT_BACK = -1;
@@ -61,22 +56,26 @@ final class WryInput {
         if (action == 1) {
             page.pressed = true;
             page.pressedButton = button;
-            button(view, MotionEvent.ACTION_DOWN, x, y, button);
+            page.pressedDownTime = SystemClock.uptimeMillis();
+            button(view, page.pressedDownTime, MotionEvent.ACTION_DOWN, x, y, button);
+            button(view, page.pressedDownTime, MotionEvent.ACTION_BUTTON_PRESS, x, y, button);
             return;
         }
         if (action == 2) {
             int released = page.pressedButton != 0 ? page.pressedButton : button;
             page.pressed = false;
             page.pressedButton = 0;
-            button(view, MotionEvent.ACTION_UP, x, y, released);
+            button(view, page.pressedDownTime, MotionEvent.ACTION_BUTTON_RELEASE, x, y, released);
+            button(view, page.pressedDownTime, MotionEvent.ACTION_UP, x, y, released);
+            page.pressedDownTime = 0;
             return;
         }
         if (action == 3) {
-            wheel(page, view, x, y, amount);
+            scroll(view, x, y, amount);
             return;
         }
         if (page.pressed) {
-            button(view, MotionEvent.ACTION_MOVE, x, y, page.pressedButton);
+            button(view, page.pressedDownTime, MotionEvent.ACTION_MOVE, x, y, page.pressedButton);
             return;
         }
         mouse(view, MotionEvent.ACTION_HOVER_MOVE, x, y);
@@ -136,18 +135,6 @@ final class WryInput {
             default:
                 return 0;
         }
-    }
-
-    /**
-     * The axis of a scroll event does not carry the steps the game reports, so the wheel is raised in
-     * the page instead, where the delta is what the page expects.
-     */
-    private static void wheel(final WryPage page, WryView view, float x, float y, float amount) {
-        final float delta = -amount * WHEEL_STEP;
-        if (delta == 0f) {
-            return;
-        }
-        view.evaluateJavascript("(function(){" + WryScripts.wheel(x, y, delta) + "})()", null);
     }
 
     /**
@@ -218,14 +205,58 @@ final class WryInput {
 
     /**
      * A press, a drag and a release are injected as a native mouse stream, the same way the hover
-     * above is. Chromium turns the stream into the pointer, mouse, click and double click events of
-     * the page, which keeps every frame of a drag off the javascript bridge. The button is carried
-     * in the button state of every event, including the release: the builder of Chromium reads the
-     * pressed buttons from the modifiers when the action button of a release is unset.
+     * above is. A press is a down followed by a button press and a release is a button release
+     * followed by an up, because the forwarder of the web view turns only the button actions of a
+     * mouse stream into the presses of the page, and keeps the up and down for the stream of a drag.
+     * Chromium raises the pointer, mouse, click and double click events of the page from the stream,
+     * which keeps every frame of a drag off the javascript bridge.
      */
-    private static void button(WryView view, int type, float x, float y, int button) {
+    private static void button(WryView view, long downTime, int type, float x, float y, int button) {
         int state = button == 2 ? MotionEvent.BUTTON_SECONDARY
                 : button == 3 ? MotionEvent.BUTTON_TERTIARY : MotionEvent.BUTTON_PRIMARY;
+        int actionButton = 0;
+        if (type == MotionEvent.ACTION_BUTTON_PRESS) {
+            actionButton = state;
+        } else if (type == MotionEvent.ACTION_BUTTON_RELEASE) {
+            actionButton = state;
+            state = 0;
+        }
+        if (!view.isFocused()) {
+            view.requestFocus();
+        }
+        int width = view.getWidth();
+        int height = view.getHeight();
+        long now = SystemClock.uptimeMillis();
+        if (downTime <= 0 || downTime > now) {
+            downTime = now;
+        }
+        MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
+        properties.id = 0;
+        properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
+        MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
+        coords.x = x * width;
+        coords.y = y * height;
+        coords.pressure = state != 0 ? 1f : 0f;
+        MotionEvent event = MotionEvent.obtain(downTime, now, type, 1,
+                new MotionEvent.PointerProperties[]{properties},
+                new MotionEvent.PointerCoords[]{coords},
+                0, state, 1.0f, 1.0f, 0, 0,
+                InputDevice.SOURCE_MOUSE, 0);
+        if (actionButton != 0) {
+            event.setActionButton(actionButton);
+        }
+        try {
+            view.inject(event);
+        } finally {
+            event.recycle();
+        }
+    }
+
+    /**
+     * A wheel step goes through the generic motion channel as an axis of a scroll, which is what the
+     * web view turns into the wheel event of the page on its own.
+     */
+    private static void scroll(WryView view, float x, float y, float amount) {
         if (!view.isFocused()) {
             view.requestFocus();
         }
@@ -238,11 +269,11 @@ final class WryInput {
         MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
         coords.x = x * width;
         coords.y = y * height;
-        coords.pressure = type == MotionEvent.ACTION_UP ? 0f : 1f;
-        MotionEvent event = MotionEvent.obtain(now, now, type, 1,
+        coords.setAxisValue(MotionEvent.AXIS_VSCROLL, -amount);
+        MotionEvent event = MotionEvent.obtain(now, now, MotionEvent.ACTION_SCROLL, 1,
                 new MotionEvent.PointerProperties[]{properties},
                 new MotionEvent.PointerCoords[]{coords},
-                0, state, 1.0f, 1.0f, 0, 0,
+                0, 0, 1.0f, 1.0f, 0, 0,
                 InputDevice.SOURCE_MOUSE, 0);
         try {
             view.inject(event);
