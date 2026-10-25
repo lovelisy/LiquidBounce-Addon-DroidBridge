@@ -134,7 +134,7 @@ final class WryScripts {
                     + "return raw.indexOf('%')>=0?v/100:v;"
                     + "}"
                     + "function clickgui(f){"
-+ "var css='';"
+                    + "var css='';"
                     + "css+='.available-tabs{zoom:'+f+';}';"
                     + "css+='.component-drawer{zoom:'+f+';}';"
                     + "var hudResult=null;"
