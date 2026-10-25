@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "liquidbounce.DroidBridge.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "MainTitleEscapeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

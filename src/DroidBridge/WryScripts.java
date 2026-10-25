@@ -81,51 +81,37 @@ final class WryScripts {
                     + "})()";
 
     /**
-     * The width and the height the theme was drawn for, which is a desktop window.
-     *
-     * The theme writes its sizes in css pixels: the menu pads itself by 50, the drawer of the hud
-     * editor is 600 wide, the text of the buttons at the top of the click gui is 14 tall. A phone
-     * hands the page a viewport of 805x360, so those same numbers take up two and a half times the
-     * share of the screen that they take on a desktop, and the whole page looks zoomed in. Sizing
-     * the page from the viewport instead is what brings it back to the size of a desktop.
+     * Design size of the LiquidBounce theme (desktop). Fit = min(viewport/design).
+     * On a phone the same CSS pixel sizes occupy far more of the screen; fitting the
+     * viewport back to this design is what keeps ClickGUI / HUD from looking blown up.
      */
     private static final int DESKTOP_WIDTH = 1600;
 
     private static final int DESKTOP_HEIGHT = 900;
 
-    /**
-     * The narrowest the page is allowed to become, so that a small screen stays readable.
-     */
-    private static final float MIN_FIT = 0.2f;
+    private static final float MIN_FIT = 0.25f;
 
     /**
-     * The hud asks for scaleFactor*50%, which is 100% when the game reports a factor of two, and the
-     * fit is applied to that.
+     * HUD uses style.zoom = scaleFactor*50% (see Hud.svelte). Fit is multiplied on top.
      */
     private static final float HUD_FIT = 1f;
 
-    /**
-     * The height the menu needs at zoom 1, taken from the media queries of the theme: they pick .8
-     * for a window of 900, so the content is 900/.8 = 1125 tall in css pixels.
-     */
     private static final int MENU_HEIGHT = 1125;
 
-    /**
-     * The theme sizes the menu by the width alone, so a narrow screen gets a zoom that is too large
-     * for its height and the bottom bar falls below the screen. The zoom is therefore capped by what
-     * the height can hold, while a window that is tall enough keeps the value of the theme.
-     */
-    private static final float MENU_FIT = 0.2f;
+    private static final float MENU_FIT = 0.25f;
 
     /**
-     * The theme is a single page app, so the route changes without the page being loaded again.
-     * The routine therefore stays in the page and is called again whenever the hash changes.
+     * Theme layout reference (LiquidBounce src-theme):
+     * - ScaledClickGuiContent.svelte: .scaled-clickgui-content { transform: scale(scaleFactor*50%) }
+     * - Search.svelte: .search { position:fixed; left:50%; top:70px; transform:translateX(-50%) }
+     * - Hud.svelte: .hud { zoom: scaleFactor*50% }
      *
-     * Only the chrome that has no setting of its own is sized here. The panels and the global
-     * settings already scale themselves by the factor the game reports, so those are left to the
-     * Scale setting of the ClickGUI module. The buttons above the panels, the search box, the drawer
-     * of the hud editor and the hud itself are drawn at a fixed css size instead, so those are the
-     * ones brought down to the width of a phone.
+     * Stock SCALE only zoomed tabs/search/drawer chrome, so panels stayed desktop-sized on a
+     * phone. Panels live under .scaled-clickgui-content; that node must take the fit as well.
+     * Search is moved from top:70px to the bottom of the viewport.
+     * The HUD editor is embedded in ClickGUI; when its .hud preview exists, apply the same
+     * fit calculation used by the in-game HUD route. A narrow observer catches the editor tab
+     * being mounted later without scanning or rewriting every component.
      */
     static final String SCALE =
             "(function(){"
@@ -137,7 +123,8 @@ final class WryScripts {
                     + "var MF=" + MENU_FIT + ";"
                     + "function fit(){"
                     + "var w=window.innerWidth||W;"
-                    + "var f=w/W;"
+                    + "var h=window.innerHeight||H;"
+                    + "var f=Math.min(w/W,h/H);"
                     + "if(!isFinite(f)||f<=0){return 1;}"
                     + "return Math.min(1,Math.max(MIN,f));"
                     + "}"
@@ -147,10 +134,24 @@ final class WryScripts {
                     + "return raw.indexOf('%')>=0?v/100:v;"
                     + "}"
                     + "function clickgui(f){"
-                    + "var css='';"
-                    + "css+='.available-tabs.svelte-8tpz8n{zoom:'+f+';}';"
-                    + "css+='.search{zoom:'+f+';}';"
++ "var css='';"
+                    + "css+='.available-tabs{zoom:'+f+';}';"
                     + "css+='.component-drawer{zoom:'+f+';}';"
+                    + "var hudResult=null;"
+                    + "if(document.querySelector('.hud')){"
+                    + "hudResult=hud(f);css+=hudResult.css;"
+                    + "}"
+
+                    + "css+='.search{"
+                    + "position:fixed!important;"
+                    + "left:50%!important;"
+                    + "right:auto!important;"
+                    + "top:auto!important;"
+                    + "bottom:20px!important;"
+                    + "transform:translateX(-50%)!important;"
+                    + "zoom:'+f+';"
+                    + "z-index:9999999999!important;"
+                    + "}';"
                     + "return {css:css,log:'clickgui chrome '+f};"
                     + "}"
                     + "function hud(f){"
@@ -162,7 +163,7 @@ final class WryScripts {
                     + "}"
                     + "var want=z*f*HUD;"
                     + "return {css:'.hud{zoom:'+want.toFixed(3)+'!important;}',"
-                    + "log:'hud '+z+'x'+f.toFixed(3)+'='+want.toFixed(3)};"
+                    + "log:'hud '+z+'x'+f.toFixed(3)+'x'+HUD+'='+want.toFixed(3)};"
                     + "}"
                     + "function menu(){"
                     + "var base=window.__wryMenuBase;"
@@ -196,6 +197,17 @@ final class WryScripts {
                     + "window.__wryScaleHooked=true;"
                     + "window.addEventListener('hashchange',function(){window.__wryScale();});"
                     + "window.addEventListener('resize',function(){window.__wryScale();});"
+                    + "if(window.MutationObserver&&document.documentElement){"
+                    + "window.__wryHudFitObserver=new MutationObserver(function(){"
+                    + "if((location.hash||'').indexOf('/clickgui')<0){return;}"
+                    + "var current=document.querySelector('.hud');"
+                    + "if(current!==window.__wryHudFitLast){"
+                    + "window.__wryHudFitLast=current;"
+                    + "if(current&&window.__wryScale){window.__wryScale();}"
+                    + "}"
+                    + "});"
+                    + "window.__wryHudFitObserver.observe(document.documentElement,{childList:true,subtree:true});"
+                    + "}"
                     + "}"
                     + "return window.__wryScale();"
                     + "})()";
