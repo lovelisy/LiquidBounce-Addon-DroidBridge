@@ -347,6 +347,31 @@ final class WryScripts {
                 + "return 'edited';";
     }
 
+    static final String PROBE =
+            "(function(){"
+                    + "if(window.__wryProbe){return 'already';}"
+                    + "window.__wryProbe=true;"
+                    + "var box=document.createElement('div');"
+                    + "box.style.cssText='position:fixed;top:0;left:0;z-index:2147483647;"
+                    + "background:#000;color:#0f0;font:12px monospace;padding:4px 8px;"
+                    + "pointer-events:none;white-space:pre;';"
+                    + "document.body.appendChild(box);"
+                    + "var n=0;"
+                    + "function log(kind,e){"
+                    + "n++;"
+                    + "var x=e.clientX!==undefined?Math.round(e.clientX):'?';"
+                    + "var y=e.clientY!==undefined?Math.round(e.clientY):'?';"
+                    + "var b=e.button!==undefined?e.button:'';"
+                    + "box.textContent='['+kind+' x'+b+'] '+x+','+y+'  #'+n;"
+                    + "}"
+                    + "['mousedown','mouseup','click','dblclick','contextmenu','touchstart',"
+                    + "'touchend','mousemove','pointerdown','pointerup'].forEach(function(kind){"
+                    + "window.addEventListener(kind,function(e){log(kind,e);},true);"
+                    + "});"
+                    + "return 'probe on';"
+                    + "})()";
+
+
     private WryScripts() {
     }
 }
