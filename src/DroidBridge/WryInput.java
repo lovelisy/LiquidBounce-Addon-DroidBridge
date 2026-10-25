@@ -205,11 +205,11 @@ final class WryInput {
 
     /**
      * A press, a drag and a release are injected as a native mouse stream, the same way the hover
-     * above is. A press is a down followed by a button press and a release is a button release
-     * followed by an up, because the forwarder of the web view turns only the button actions of a
-     * mouse stream into the presses of the page, and keeps the up and down for the stream of a drag.
-     * Chromium raises the pointer, mouse, click and double click events of the page from the stream,
-     * which keeps every frame of a drag off the javascript bridge.
+     * above is. The presses travel on the generic motion channel, which is where the event handler
+     * of the web contents expects the button actions of a mouse, and the down and up travel on the
+     * touch channel to complete the stream of a drag. Chromium raises the pointer, mouse, click and
+     * double click events of the page from the stream, which keeps every frame of a drag off the
+     * javascript bridge.
      */
     private static void button(WryView view, long downTime, int type, float x, float y, int button) {
         int state = button == 2 ? MotionEvent.BUTTON_SECONDARY
