@@ -20,10 +20,7 @@ final class WryView extends WebView {
         injecting = true;
         try {
             int action = event.getActionMasked();
-            if (action == MotionEvent.ACTION_HOVER_MOVE
-                    || action == MotionEvent.ACTION_SCROLL
-                    || action == MotionEvent.ACTION_BUTTON_PRESS
-                    || action == MotionEvent.ACTION_BUTTON_RELEASE) {
+            if (action == MotionEvent.ACTION_HOVER_MOVE || action == MotionEvent.ACTION_SCROLL) {
                 return dispatchGenericMotionEvent(event);
             }
             return dispatchTouchEvent(event);

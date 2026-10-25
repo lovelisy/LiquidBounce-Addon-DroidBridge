@@ -26,7 +26,11 @@ final class WryPage {
 
     int pressedButton;
 
-    long pressedDownTime;
+    volatile float pendingX;
+
+    volatile float pendingY;
+
+    volatile boolean hoverPosted;
 
     long lastPress;
 
@@ -40,11 +44,11 @@ final class WryPage {
 
     boolean doubleClick;
 
-    volatile float pendingX;
+    float sentX;
 
-    volatile float pendingY;
+    float sentY;
 
-    volatile boolean hoverPosted;
+    boolean sent;
 
     WryPage(long id, WryView view) {
         this(id, view, LAYER_HUD);
@@ -54,6 +58,16 @@ final class WryPage {
         this.id = id;
         this.view = view;
         this.layer = layer;
+    }
+
+    boolean sameSpot(float x, float y) {
+        return sent && sentX == x && sentY == y;
+    }
+
+    void remember(float x, float y) {
+        sent = true;
+        sentX = x;
+        sentY = y;
     }
 
     /**

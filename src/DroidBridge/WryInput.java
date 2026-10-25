@@ -18,6 +18,11 @@ import java.util.Map;
 final class WryInput {
 
     /**
+     * One wheel step in pixels of a page, the rough distance a mouse wheel covers in a browser.
+     */
+    private static final float WHEEL_STEP = 100f;
+
+    /**
      * The keys the bridge handles itself, everything else goes to the input method of the system.
      */
     private static final int EDIT_BACK = -1;
@@ -56,7 +61,6 @@ final class WryInput {
         if (action == 1) {
             page.pressed = true;
             page.pressedButton = button;
-            page.pressedDownTime = SystemClock.uptimeMillis();
             dom(page, view, x, y, "down", button);
             return;
         }
@@ -65,60 +69,17 @@ final class WryInput {
             page.pressed = false;
             page.pressedButton = 0;
             dom(page, view, x, y, "up", released);
-            page.pressedDownTime = 0;
             return;
         }
         if (action == 3) {
-            scroll(view, x, y, amount);
+            wheel(page, view, x, y, amount);
             return;
         }
         if (page.pressed) {
-            button(view, page.pressedDownTime, MotionEvent.ACTION_MOVE, x, y, page.pressedButton);
+            dom(page, view, x, y, "move", page.pressedButton);
             return;
         }
         mouse(view, MotionEvent.ACTION_HOVER_MOVE, x, y);
-    }
-
-    /**
-     * A press and a release are raised in the page itself, because the button actions of an
-     * injected mouse stream do not reach the page of every web view. A drag stays native: the
-     * moves of a pressed pointer go through the touch stream of the view, which the web view
-     * turns into the move events of the page on its own.
-     */
-    private static void dom(WryPage page, WryView view, final float x, final float y,
-                            final String phase, int button) {
-        int domButton = button == 2 ? 2 : (button == 3 ? 1 : 0);
-        int bit = domButton == 2 ? 2 : (domButton == 1 ? 4 : 1);
-        boolean down = "down".equals(phase);
-        boolean up = "up".equals(phase);
-
-        int detail = 1;
-        boolean twice = false;
-        if (down) {
-            long now = SystemClock.uptimeMillis();
-            twice = page.lastPress != 0L && domButton == 0 && page.lastButton == 0
-                    && now - page.lastPress < 500L
-                    && Math.abs(x - page.lastX) < 0.01f && Math.abs(y - page.lastY) < 0.01f;
-            detail = twice ? 2 : 1;
-            page.lastPress = now;
-            page.lastX = x;
-            page.lastY = y;
-            page.lastButton = domButton;
-            page.detail = detail;
-            page.doubleClick = twice;
-        } else if (up) {
-            detail = page.detail;
-            twice = page.doubleClick;
-            page.doubleClick = false;
-        }
-
-        StringBuilder script = new StringBuilder(80);
-        script.append("window.__wry&&window.__wry('").append(phase).append("',")
-                .append(x).append(',').append(y).append(',')
-                .append(domButton).append(',').append(detail).append(',')
-                .append(up ? 0 : bit).append(')');
-
-        view.evaluateJavascript(script.toString(), null);
     }
 
     static void key(WryPage page, int keycode, boolean pressed) {
@@ -175,6 +136,19 @@ final class WryInput {
             default:
                 return 0;
         }
+    }
+
+    /**
+     * The axis of a scroll event does not carry the steps the game reports, so the wheel is raised in
+     * the page instead, where the delta is what the page expects.
+     */
+    private static void wheel(final WryPage page, WryView view, float x, float y, float amount) {
+        final float delta = -amount * WHEEL_STEP;
+        if (delta == 0f) {
+            return;
+        }
+        page.remember(x, y);
+        view.evaluateJavascript("(function(){" + WryScripts.wheel(x, y, delta) + "})()", null);
     }
 
     /**
@@ -244,68 +218,50 @@ final class WryInput {
     }
 
     /**
-     * A drag travels as a native stream of moves on the touch channel of the view, which the web
-     * view turns into the move events of the page on its own. That keeps every frame of a drag off
-     * the javascript bridge, while the presses themselves are raised in the page.
+     * A motion event cannot carry the button that was released, so Chromium never reports a click for
+     * one. The page is driven directly instead, where the coordinates are taken as fractions of the
+     * viewport and the target is resolved by hit testing.
      */
-    private static void button(WryView view, long downTime, int type, float x, float y, int button) {
-        int state = button == 2 ? MotionEvent.BUTTON_SECONDARY
-                : button == 3 ? MotionEvent.BUTTON_TERTIARY : MotionEvent.BUTTON_PRIMARY;
+    private static void dom(WryPage page, WryView view, final float x, final float y,
+                            final String phase, int button) {
         if (!view.isFocused()) {
             view.requestFocus();
         }
-        int width = view.getWidth();
-        int height = view.getHeight();
-        long now = SystemClock.uptimeMillis();
-        if (downTime <= 0 || downTime > now) {
-            downTime = now;
-        }
-        MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
-        properties.id = 0;
-        properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
-        MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
-        coords.x = x * width;
-        coords.y = y * height;
-        coords.pressure = type == MotionEvent.ACTION_UP ? 0f : 1f;
-        MotionEvent event = MotionEvent.obtain(downTime, now, type, 1,
-                new MotionEvent.PointerProperties[]{properties},
-                new MotionEvent.PointerCoords[]{coords},
-                0, state, 1.0f, 1.0f, 0, 0,
-                InputDevice.SOURCE_MOUSE, 0);        try {
-            view.inject(event);
-        } finally {
-            event.recycle();
-        }
-    }
+        int domButton = button == 2 ? 2 : (button == 3 ? 1 : 0);
+        int bit = domButton == 2 ? 2 : (domButton == 1 ? 4 : 1);
+        boolean down = "down".equals(phase);
+        boolean up = "up".equals(phase);
 
-    /**
-     * A wheel step goes through the generic motion channel as an axis of a scroll, which is what the
-     * web view turns into the wheel event of the page on its own.
-     */
-    private static void scroll(WryView view, float x, float y, float amount) {
-        if (!view.isFocused()) {
-            view.requestFocus();
+        int detail = 1;
+        boolean twice = false;
+        if (down) {
+            long now = SystemClock.uptimeMillis();
+            twice = page.lastPress != 0L && domButton == 0 && page.lastButton == 0
+                    && now - page.lastPress < 500L
+                    && Math.abs(x - page.lastX) < 0.01f && Math.abs(y - page.lastY) < 0.01f;
+            detail = twice ? 2 : 1;
+            page.lastPress = now;
+            page.lastX = x;
+            page.lastY = y;
+            page.lastButton = domButton;
+            page.detail = detail;
+            page.doubleClick = twice;
+        } else if (up) {
+            detail = page.detail;
+            twice = page.doubleClick;
+            page.doubleClick = false;
+        } else if (page.sameSpot(x, y)) {
+            return;
         }
-        int width = view.getWidth();
-        int height = view.getHeight();
-        long now = SystemClock.uptimeMillis();
-        MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
-        properties.id = 0;
-        properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
-        MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
-        coords.x = x * width;
-        coords.y = y * height;
-        coords.setAxisValue(MotionEvent.AXIS_VSCROLL, -amount);
-        MotionEvent event = MotionEvent.obtain(now, now, MotionEvent.ACTION_SCROLL, 1,
-                new MotionEvent.PointerProperties[]{properties},
-                new MotionEvent.PointerCoords[]{coords},
-                0, 0, 1.0f, 1.0f, 0, 0,
-                InputDevice.SOURCE_MOUSE, 0);
-        try {
-            view.inject(event);
-        } finally {
-            event.recycle();
-        }
+        page.remember(x, y);
+
+        StringBuilder script = new StringBuilder(80);
+        script.append("window.__wry&&window.__wry('").append(phase).append("',")
+                .append(x).append(',').append(y).append(',')
+                .append(domButton).append(',').append(detail).append(',')
+                .append(up ? 0 : bit).append(')');
+
+        view.evaluateJavascript(script.toString(), null);
     }
 
     private WryInput() {

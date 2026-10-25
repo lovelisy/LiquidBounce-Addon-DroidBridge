@@ -109,6 +109,9 @@ final class WryScripts {
      * Stock SCALE only zoomed tabs/search/drawer chrome, so panels stayed desktop-sized on a
      * phone. Panels live under .scaled-clickgui-content; that node must take the fit as well.
      * Search is moved from top:70px to the bottom of the viewport.
+     * The HUD editor is embedded in ClickGUI; when its .hud preview exists, apply the same
+     * fit calculation used by the in-game HUD route. A narrow observer catches the editor tab
+     * being mounted later without scanning or rewriting every component.
      */
     static final String SCALE =
             "(function(){"
@@ -130,19 +133,15 @@ final class WryScripts {
                     + "if(!isFinite(v)||v<=0){return 0;}"
                     + "return raw.indexOf('%')>=0?v/100:v;"
                     + "}"
-                    + "function hudWant(f){"
-                    + "var z=2;"
-                    + "var el=document.querySelector('.hud');"
-                    + "if(el&&el.style&&el.style.zoom){"
-                    + "var got=ratio(el.style.zoom);"
-                    + "if(got){z=got;}"
-                    + "}"
-                    + "return z*f*HUD;"
-                    + "}"
                     + "function clickgui(f){"
-                    + "var css='';"
++ "var css='';"
                     + "css+='.available-tabs{zoom:'+f+';}';"
                     + "css+='.component-drawer{zoom:'+f+';}';"
+                    + "var hudResult=null;"
+                    + "if(document.querySelector('.hud')){"
+                    + "hudResult=hud(f);css+=hudResult.css;"
+                    + "}"
+
                     + "css+='.search{"
                     + "position:fixed!important;"
                     + "left:50%!important;"
@@ -153,23 +152,18 @@ final class WryScripts {
                     + "zoom:'+f+';"
                     + "z-index:9999999999!important;"
                     + "}';"
-                    + "var hw=hudWant(f);"
-                    + "css+='.hud{zoom:'+hw.toFixed(3)+'!important;}';"
-                    + "css+='.scaled-clickgui-content .hud{"
-                    + "transform:scale(1)!important;"
-                    + "transform-origin:top left!important;"
-                    + "}';"
-                    /*
-                     * Theme ScaledClickGuiContent uses scaleFactor*50% and ClickGUI Scale loads
-                     * async — first paint is oversized for a few seconds. Hide until two frames
-                     * after enter, and keep re-applying fit while the theme settles.
-                     */
-                    + "return {css:css,log:'clickgui chrome '+f+' hud '+hw.toFixed(3)};"
+                    + "return {css:css,log:'clickgui chrome '+f};"
                     + "}"
                     + "function hud(f){"
-                    + "var want=hudWant(f);"
+                    + "var z=2;"
+                    + "var el=document.querySelector('.hud');"
+                    + "if(el&&el.style&&el.style.zoom){"
+                    + "var got=ratio(el.style.zoom);"
+                    + "if(got){z=got;}"
+                    + "}"
+                    + "var want=z*f*HUD;"
                     + "return {css:'.hud{zoom:'+want.toFixed(3)+'!important;}',"
-                    + "log:'hud '+want.toFixed(3)};"
+                    + "log:'hud '+z+'x'+f.toFixed(3)+'x'+HUD+'='+want.toFixed(3)};"
                     + "}"
                     + "function menu(){"
                     + "var base=window.__wryMenuBase;"
@@ -203,63 +197,19 @@ final class WryScripts {
                     + "window.__wryScaleHooked=true;"
                     + "window.addEventListener('hashchange',function(){window.__wryScale();});"
                     + "window.addEventListener('resize',function(){window.__wryScale();});"
+                    + "if(window.MutationObserver&&document.documentElement){"
+                    + "window.__wryHudFitObserver=new MutationObserver(function(){"
+                    + "if((location.hash||'').indexOf('/clickgui')<0){return;}"
+                    + "var current=document.querySelector('.hud');"
+                    + "if(current!==window.__wryHudFitLast){"
+                    + "window.__wryHudFitLast=current;"
+                    + "if(current&&window.__wryScale){window.__wryScale();}"
+                    + "}"
+                    + "});"
+                    + "window.__wryHudFitObserver.observe(document.documentElement,{childList:true,subtree:true});"
+                    + "}"
                     + "}"
                     + "return window.__wryScale();"
-                    + "})()";
-
-    /**
-     * ClickGUI module descriptions pick left/right with a 300px right-margin test
-     * (Module.svelte). On a phone that test almost always fails, so the tooltip is
-     * stuck on the left. Reposition .description-wrapper to the side with more room
-     * and keep it on-screen.
-     */
-    static final String DESCRIPTION_FIX =
-            "(function(){"
-                    + "if(window.__wryDescFix){return 'already';}"
-                    + "window.__wryDescFix=true;"
-                    + "function place(el){"
-                    + "if(!el||!el.style){return;}"
-                    + "var w=el.offsetWidth||160;"
-                    + "var h=el.offsetHeight||40;"
-                    + "var vw=window.innerWidth||0;"
-                    + "var vh=window.innerHeight||0;"
-                    + "if(vw<1){return;}"
-                    + "var left=parseFloat(el.style.left);"
-                    + "var top=parseFloat(el.style.top);"
-                    + "if(!isFinite(left)){left=0;}"
-                    + "if(!isFinite(top)){top=vh/2;}"
-                    + "var desc=el.querySelector('.description');"
-                    /* Prefer the side with more free space around the tooltip midpoint. */
-                    + "var moduleGuess=left;"
-                    + "if(desc&&desc.classList.contains('right')){moduleGuess=left+w+20;}"
-                    + "else{moduleGuess=left-20;}"
-                    + "var spaceRight=vw-moduleGuess;"
-                    + "var spaceLeft=moduleGuess;"
-                    + "var preferRight=spaceRight>=spaceLeft;"
-                    + "var newLeft;"
-                    + "if(preferRight){"
-                    + "newLeft=moduleGuess+12;"
-                    + "if(desc){desc.classList.remove('right');}"
-                    + "}else{"
-                    + "newLeft=moduleGuess-w-12;"
-                    + "if(desc){desc.classList.add('right');}"
-                    + "}"
-                    + "if(newLeft<4){newLeft=4;}"
-                    + "if(newLeft+w>vw-4){newLeft=Math.max(4,vw-w-4);}"
-                    + "if(top<h/2+4){top=h/2+4;}"
-                    + "if(top>vh-h/2-4){top=vh-h/2-4;}"
-                    + "el.style.left=newLeft+'px';"
-                    + "el.style.top=top+'px';"
-                    + "}"
-                    + "function scan(){"
-                    + "document.querySelectorAll('.description-wrapper').forEach(place);"
-                    + "}"
-                    + "var obs=new MutationObserver(function(){scan();});"
-                    + "obs.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['style','class']});"
-                    + "window.addEventListener('resize',scan);"
-                    + "setInterval(scan,400);"
-                    + "scan();"
-                    + "return 'desc-fix';"
                     + "})()";
 
     /**
@@ -280,6 +230,45 @@ final class WryScripts {
                     + ".catch(function(){window.__wryFonts=true;});"
                     + "return 'loading';"
                     + "})()";
+
+    /**
+     * A pointer event is fired from the page itself, so the target is resolved by hit testing and
+     * the coordinates are taken as fractions of the viewport.
+     */
+    static final String DISPATCH =
+            "window.__wry=function(phase,fx,fy,btn,detail,bit){"
+                    + "var bx=fx*window.innerWidth,by=fy*window.innerHeight;"
+                    + "var t=document.elementFromPoint(bx,by)||document.body;"
+                    + "var o={bubbles:true,cancelable:true,view:window,button:btn,buttons:bit,"
+                    + "clientX:bx,clientY:by,screenX:bx,screenY:by,detail:detail,"
+                    + "pointerId:1,pointerType:'mouse',isPrimary:true,width:1,height:1,"
+                    + "pressure:phase==='up'?0:0.5};"
+                    + "if(phase==='down'){"
+                    + "var target=t;"
+                    + "while(target&&target!==document.body){"
+                    + "if(target.tagName==='INPUT'||target.tagName==='TEXTAREA'"
+                    + "||target.isContentEditable||target.getAttribute('contenteditable')==='true'){break;}"
+                    + "target=target.parentElement;}"
+                    + "if(target&&target!==document.body&&target.focus){"
+                    + "try{target.focus();}catch(e){}}"
+                    + "t.dispatchEvent(new PointerEvent('pointerdown',o));"
+                    + "t.dispatchEvent(new MouseEvent('mousedown',o));"
+                    + "}else if(phase==='up'){"
+                    + "t.dispatchEvent(new PointerEvent('pointerup',o));"
+                    + "t.dispatchEvent(new MouseEvent('mouseup',o));"
+                    + "if(btn===2){t.dispatchEvent(new MouseEvent('contextmenu',o));}"
+                    + "else{t.dispatchEvent(new MouseEvent('click',o));"
+                    + "if(detail>1){t.dispatchEvent(new MouseEvent('dblclick',o));}}"
+                    + "}else{"
+                    + "t.dispatchEvent(new PointerEvent('pointermove',o));"
+                    + "t.dispatchEvent(new MouseEvent('mousemove',o));}"
+                    + "return t.tagName;};";
+
+    static final String DISPATCH_SETUP =
+            "(function(){"
+                    + "if(window.__wry){return 'already';}"
+                    + DISPATCH
+                    + "return 'ready';})()";
 
     /**
      * Puts text into the field the page has focused, the way typing would.
@@ -348,67 +337,46 @@ final class WryScripts {
     }
 
     /**
-     * A pointer event is fired from the page itself, so the target is resolved by hit testing and
-     * the coordinates are taken as fractions of the viewport.
+     * The axis of a scroll event does not carry the steps the game reports, so the wheel is raised in
+     * the page instead, where the delta is what the page expects.
      */
-    static final String DISPATCH =
-            "window.__wry=function(phase,fx,fy,btn,detail,bit){"
-                    + "var bx=fx*window.innerWidth,by=fy*window.innerHeight;"
-                    + "var t=document.elementFromPoint(bx,by)||document.body;"
-                    + "var o={bubbles:true,cancelable:true,view:window,button:btn,buttons:bit,"
-                    + "clientX:bx,clientY:by,screenX:bx,screenY:by,detail:detail,"
-                    + "pointerId:1,pointerType:'mouse',isPrimary:true,width:1,height:1,"
-                    + "pressure:phase==='up'?0:0.5};"
-                    + "if(phase==='down'){"
-                    + "var target=t;"
-                    + "while(target&&target!==document.body){"
-                    + "if(target.tagName==='INPUT'||target.tagName==='TEXTAREA'"
-                    + "||target.isContentEditable||target.getAttribute('contenteditable')==='true'){break;}"
-                    + "target=target.parentElement;}"
-                    + "if(target&&target!==document.body&&target.focus){"
-                    + "try{target.focus();}catch(e){}}"
-                    + "t.dispatchEvent(new PointerEvent('pointerdown',o));"
-                    + "t.dispatchEvent(new MouseEvent('mousedown',o));"
-                    + "}else if(phase==='up'){"
-                    + "t.dispatchEvent(new PointerEvent('pointerup',o));"
-                    + "t.dispatchEvent(new MouseEvent('mouseup',o));"
-                    + "if(btn===2){t.dispatchEvent(new MouseEvent('contextmenu',o));}"
-                    + "else{t.dispatchEvent(new MouseEvent('click',o));"
-                    + "if(detail>1){t.dispatchEvent(new MouseEvent('dblclick',o));}}"
-                    + "}else{"
-                    + "t.dispatchEvent(new PointerEvent('pointermove',o));"
-                    + "t.dispatchEvent(new MouseEvent('mousemove',o));}"
-                    + "return t.tagName;};";
-
-    static final String DISPATCH_SETUP =
-            "(function(){"
-                    + "if(window.__wry){return 'already';}"
-                    + DISPATCH
-                    + "return 'ready';})()";
-
-    static final String PROBE =            "(function(){"
-                    + "if(window.__wryProbe){return 'already';}"
-                    + "window.__wryProbe=true;"
-                    + "var box=document.createElement('div');"
-                    + "box.style.cssText='position:fixed;top:0;left:0;z-index:2147483647;"
-                    + "background:#000;color:#0f0;font:12px monospace;padding:4px 8px;"
-                    + "pointer-events:none;white-space:pre;';"
-                    + "document.body.appendChild(box);"
-                    + "var n=0;"
-                    + "function log(kind,e){"
-                    + "n++;"
-                    + "var x=e.clientX!==undefined?Math.round(e.clientX):'?';"
-                    + "var y=e.clientY!==undefined?Math.round(e.clientY):'?';"
-                    + "var b=e.button!==undefined?e.button:'';"
-                    + "box.textContent='['+kind+' x'+b+'] '+x+','+y+'  #'+n;"
-                    + "}"
-                    + "['mousedown','mouseup','click','dblclick','contextmenu','touchstart',"
-                    + "'touchend','mousemove','pointerdown','pointerup'].forEach(function(kind){"
-                    + "window.addEventListener(kind,function(e){log(kind,e);},true);"
-                    + "});"
-                    + "return 'probe on';"
-                    + "})()";
-
+    static String wheel(float x, float y, float delta) {
+        return "var bx=" + x + "*window.innerWidth,by=" + y + "*window.innerHeight;"
+                + "var t=document.elementFromPoint(bx,by);"
+                + "var dy=" + delta + ";"
+                + "var moved=null;"
+                + "var found=false;"
+                + "while(t&&t!==document.body&&t!==document.documentElement){"
+                + "var style=getComputedStyle(t);"
+                + "var scrollable=(style.overflowY==='auto'||style.overflowY==='scroll')"
+                + "&&t.scrollHeight>t.clientHeight;"
+                + "if(scrollable){"
+                + "found=true;"
+                + "var before=t.scrollTop;"
+                + "var smooth=getComputedStyle(t).scrollBehavior;"
+                + "if(smooth!=='auto'){t.style.scrollBehavior='auto';}"
+                + "t.scrollTop=before+dy;"
+                + "if(smooth!=='auto'){t.style.scrollBehavior=smooth;}"
+                + "if(t.scrollTop!==before){moved=t.tagName+' '+before+'->'+t.scrollTop;break;}"
+                + "var room=dy>0?(t.scrollHeight-t.clientHeight-before):before;"
+                + "if(room<=0){moved=t.tagName+' at '+(dy>0?'end':'start');}"
+                + "break;}"
+                + "t=t.parentElement;}"
+                + "if(!moved&&!found){"
+                + "if(document.scrollingElement){"
+                + "var root=document.scrollingElement;"
+                + "var was=root.scrollTop;"
+                + "root.scrollTop=was+dy;"
+                + "moved='root '+was+'->'+root.scrollTop;"
+                + "}else{window.scrollBy(0,dy);moved='window';}}"
+                + "var chain=[];"
+                + "var p=document.elementFromPoint(bx,by);"
+                + "while(p&&p!==document.documentElement){"
+                + "var s2=getComputedStyle(p);"
+                + "chain.push((p.className||p.tagName)+'[ov'+s2.overflowY+' '+p.clientHeight+'/'+p.scrollHeight+']');"
+                + "p=p.parentElement;}"
+                + "return (moved||'nothing')+' | hit '+chain.slice(0,4).join(' < ');";
+    }
 
     private WryScripts() {
     }
