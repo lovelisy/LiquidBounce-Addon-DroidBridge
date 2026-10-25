@@ -66,11 +66,10 @@ final class WryPages {
                     WryPage entry = WryStack.page(id);
                     if (entry != null) {
                         entry.loaded = true;
-                        entry.sent = false;
                     }
-                    target.evaluateJavascript(WryScripts.DISPATCH_SETUP, null);
                     target.evaluateJavascript(WryScripts.MASKS, null);
                     target.evaluateJavascript(WryScripts.SCALE, null);
+                    target.evaluateJavascript(WryScripts.DESCRIPTION_FIX, null);
                     target.evaluateJavascript(WryScripts.FONTS, null);
                     WryStack.awaitVisualState(target);
                 }

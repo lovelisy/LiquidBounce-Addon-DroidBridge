@@ -61,14 +61,14 @@ final class WryInput {
         if (action == 1) {
             page.pressed = true;
             page.pressedButton = button;
-            dom(page, view, x, y, "down", button);
+            button(view, MotionEvent.ACTION_DOWN, x, y, button);
             return;
         }
         if (action == 2) {
             int released = page.pressedButton != 0 ? page.pressedButton : button;
             page.pressed = false;
             page.pressedButton = 0;
-            dom(page, view, x, y, "up", released);
+            button(view, MotionEvent.ACTION_UP, x, y, released);
             return;
         }
         if (action == 3) {
@@ -76,7 +76,7 @@ final class WryInput {
             return;
         }
         if (page.pressed) {
-            dom(page, view, x, y, "move", page.pressedButton);
+            button(view, MotionEvent.ACTION_MOVE, x, y, page.pressedButton);
             return;
         }
         mouse(view, MotionEvent.ACTION_HOVER_MOVE, x, y);
@@ -147,7 +147,6 @@ final class WryInput {
         if (delta == 0f) {
             return;
         }
-        page.remember(x, y);
         view.evaluateJavascript("(function(){" + WryScripts.wheel(x, y, delta) + "})()", null);
     }
 
@@ -218,50 +217,38 @@ final class WryInput {
     }
 
     /**
-     * A motion event cannot carry the button that was released, so Chromium never reports a click for
-     * one. The page is driven directly instead, where the coordinates are taken as fractions of the
-     * viewport and the target is resolved by hit testing.
+     * A press, a drag and a release are injected as a native mouse stream, the same way the hover
+     * above is. Chromium turns the stream into the pointer, mouse, click and double click events of
+     * the page, which keeps every frame of a drag off the javascript bridge. The button is carried
+     * in the button state of every event, including the release: the builder of Chromium reads the
+     * pressed buttons from the modifiers when the action button of a release is unset.
      */
-    private static void dom(WryPage page, WryView view, final float x, final float y,
-                            final String phase, int button) {
+    private static void button(WryView view, int type, float x, float y, int button) {
+        int state = button == 2 ? MotionEvent.BUTTON_SECONDARY
+                : button == 3 ? MotionEvent.BUTTON_TERTIARY : MotionEvent.BUTTON_PRIMARY;
         if (!view.isFocused()) {
             view.requestFocus();
         }
-        int domButton = button == 2 ? 2 : (button == 3 ? 1 : 0);
-        int bit = domButton == 2 ? 2 : (domButton == 1 ? 4 : 1);
-        boolean down = "down".equals(phase);
-        boolean up = "up".equals(phase);
-
-        int detail = 1;
-        boolean twice = false;
-        if (down) {
-            long now = SystemClock.uptimeMillis();
-            twice = page.lastPress != 0L && domButton == 0 && page.lastButton == 0
-                    && now - page.lastPress < 500L
-                    && Math.abs(x - page.lastX) < 0.01f && Math.abs(y - page.lastY) < 0.01f;
-            detail = twice ? 2 : 1;
-            page.lastPress = now;
-            page.lastX = x;
-            page.lastY = y;
-            page.lastButton = domButton;
-            page.detail = detail;
-            page.doubleClick = twice;
-        } else if (up) {
-            detail = page.detail;
-            twice = page.doubleClick;
-            page.doubleClick = false;
-        } else if (page.sameSpot(x, y)) {
-            return;
+        int width = view.getWidth();
+        int height = view.getHeight();
+        long now = SystemClock.uptimeMillis();
+        MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
+        properties.id = 0;
+        properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
+        MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
+        coords.x = x * width;
+        coords.y = y * height;
+        coords.pressure = type == MotionEvent.ACTION_UP ? 0f : 1f;
+        MotionEvent event = MotionEvent.obtain(now, now, type, 1,
+                new MotionEvent.PointerProperties[]{properties},
+                new MotionEvent.PointerCoords[]{coords},
+                0, state, 1.0f, 1.0f, 0, 0,
+                InputDevice.SOURCE_MOUSE, 0);
+        try {
+            view.inject(event);
+        } finally {
+            event.recycle();
         }
-        page.remember(x, y);
-
-        StringBuilder script = new StringBuilder(80);
-        script.append("window.__wry&&window.__wry('").append(phase).append("',")
-                .append(x).append(',').append(y).append(',')
-                .append(domButton).append(',').append(detail).append(',')
-                .append(up ? 0 : bit).append(')');
-
-        view.evaluateJavascript(script.toString(), null);
     }
 
     private WryInput() {
