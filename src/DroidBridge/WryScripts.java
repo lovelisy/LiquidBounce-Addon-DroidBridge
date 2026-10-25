@@ -347,8 +347,46 @@ final class WryScripts {
                 + "return 'edited';";
     }
 
-    static final String PROBE =
+    /**
+     * A pointer event is fired from the page itself, so the target is resolved by hit testing and
+     * the coordinates are taken as fractions of the viewport.
+     */
+    static final String DISPATCH =
+            "window.__wry=function(phase,fx,fy,btn,detail,bit){"
+                    + "var bx=fx*window.innerWidth,by=fy*window.innerHeight;"
+                    + "var t=document.elementFromPoint(bx,by)||document.body;"
+                    + "var o={bubbles:true,cancelable:true,view:window,button:btn,buttons:bit,"
+                    + "clientX:bx,clientY:by,screenX:bx,screenY:by,detail:detail,"
+                    + "pointerId:1,pointerType:'mouse',isPrimary:true,width:1,height:1,"
+                    + "pressure:phase==='up'?0:0.5};"
+                    + "if(phase==='down'){"
+                    + "var target=t;"
+                    + "while(target&&target!==document.body){"
+                    + "if(target.tagName==='INPUT'||target.tagName==='TEXTAREA'"
+                    + "||target.isContentEditable||target.getAttribute('contenteditable')==='true'){break;}"
+                    + "target=target.parentElement;}"
+                    + "if(target&&target!==document.body&&target.focus){"
+                    + "try{target.focus();}catch(e){}}"
+                    + "t.dispatchEvent(new PointerEvent('pointerdown',o));"
+                    + "t.dispatchEvent(new MouseEvent('mousedown',o));"
+                    + "}else if(phase==='up'){"
+                    + "t.dispatchEvent(new PointerEvent('pointerup',o));"
+                    + "t.dispatchEvent(new MouseEvent('mouseup',o));"
+                    + "if(btn===2){t.dispatchEvent(new MouseEvent('contextmenu',o));}"
+                    + "else{t.dispatchEvent(new MouseEvent('click',o));"
+                    + "if(detail>1){t.dispatchEvent(new MouseEvent('dblclick',o));}}"
+                    + "}else{"
+                    + "t.dispatchEvent(new PointerEvent('pointermove',o));"
+                    + "t.dispatchEvent(new MouseEvent('mousemove',o));}"
+                    + "return t.tagName;};";
+
+    static final String DISPATCH_SETUP =
             "(function(){"
+                    + "if(window.__wry){return 'already';}"
+                    + DISPATCH
+                    + "return 'ready';})()";
+
+    static final String PROBE =            "(function(){"
                     + "if(window.__wryProbe){return 'already';}"
                     + "window.__wryProbe=true;"
                     + "var box=document.createElement('div');"

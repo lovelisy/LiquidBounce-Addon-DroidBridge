@@ -71,6 +71,7 @@ final class WryPages {
                     target.evaluateJavascript(WryScripts.SCALE, null);
                     target.evaluateJavascript(WryScripts.DESCRIPTION_FIX, null);
                     target.evaluateJavascript(WryScripts.FONTS, null);
+                    target.evaluateJavascript(WryScripts.DISPATCH_SETUP, null);
                     target.evaluateJavascript(WryScripts.PROBE, null);
                     WryStack.awaitVisualState(target);
                 }

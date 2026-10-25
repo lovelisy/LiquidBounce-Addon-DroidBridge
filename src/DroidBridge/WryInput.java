@@ -57,16 +57,14 @@ final class WryInput {
             page.pressed = true;
             page.pressedButton = button;
             page.pressedDownTime = SystemClock.uptimeMillis();
-            button(view, page.pressedDownTime, MotionEvent.ACTION_DOWN, x, y, button);
-            button(view, page.pressedDownTime, MotionEvent.ACTION_BUTTON_PRESS, x, y, button);
+            dom(page, view, x, y, "down", button);
             return;
         }
         if (action == 2) {
             int released = page.pressedButton != 0 ? page.pressedButton : button;
             page.pressed = false;
             page.pressedButton = 0;
-            button(view, page.pressedDownTime, MotionEvent.ACTION_BUTTON_RELEASE, x, y, released);
-            button(view, page.pressedDownTime, MotionEvent.ACTION_UP, x, y, released);
+            dom(page, view, x, y, "up", released);
             page.pressedDownTime = 0;
             return;
         }
@@ -79,6 +77,48 @@ final class WryInput {
             return;
         }
         mouse(view, MotionEvent.ACTION_HOVER_MOVE, x, y);
+    }
+
+    /**
+     * A press and a release are raised in the page itself, because the button actions of an
+     * injected mouse stream do not reach the page of every web view. A drag stays native: the
+     * moves of a pressed pointer go through the touch stream of the view, which the web view
+     * turns into the move events of the page on its own.
+     */
+    private static void dom(WryPage page, WryView view, final float x, final float y,
+                            final String phase, int button) {
+        int domButton = button == 2 ? 2 : (button == 3 ? 1 : 0);
+        int bit = domButton == 2 ? 2 : (domButton == 1 ? 4 : 1);
+        boolean down = "down".equals(phase);
+        boolean up = "up".equals(phase);
+
+        int detail = 1;
+        boolean twice = false;
+        if (down) {
+            long now = SystemClock.uptimeMillis();
+            twice = page.lastPress != 0L && domButton == 0 && page.lastButton == 0
+                    && now - page.lastPress < 500L
+                    && Math.abs(x - page.lastX) < 0.01f && Math.abs(y - page.lastY) < 0.01f;
+            detail = twice ? 2 : 1;
+            page.lastPress = now;
+            page.lastX = x;
+            page.lastY = y;
+            page.lastButton = domButton;
+            page.detail = detail;
+            page.doubleClick = twice;
+        } else if (up) {
+            detail = page.detail;
+            twice = page.doubleClick;
+            page.doubleClick = false;
+        }
+
+        StringBuilder script = new StringBuilder(80);
+        script.append("window.__wry&&window.__wry('").append(phase).append("',")
+                .append(x).append(',').append(y).append(',')
+                .append(domButton).append(',').append(detail).append(',')
+                .append(up ? 0 : bit).append(')');
+
+        view.evaluateJavascript(script.toString(), null);
     }
 
     static void key(WryPage page, int keycode, boolean pressed) {
@@ -204,12 +244,9 @@ final class WryInput {
     }
 
     /**
-     * A press, a drag and a release are injected as a native mouse stream, the same way the hover
-     * above is. The presses travel on the generic motion channel, which is where the event handler
-     * of the web contents expects the button actions of a mouse, and the down and up travel on the
-     * touch channel to complete the stream of a drag. Chromium raises the pointer, mouse, click and
-     * double click events of the page from the stream, which keeps every frame of a drag off the
-     * javascript bridge.
+     * A drag travels as a native stream of moves on the touch channel of the view, which the web
+     * view turns into the move events of the page on its own. That keeps every frame of a drag off
+     * the javascript bridge, while the presses themselves are raised in the page.
      */
     private static void button(WryView view, long downTime, int type, float x, float y, int button) {
         int state = button == 2 ? MotionEvent.BUTTON_SECONDARY
@@ -234,8 +271,7 @@ final class WryInput {
                 new MotionEvent.PointerProperties[]{properties},
                 new MotionEvent.PointerCoords[]{coords},
                 0, state, 1.0f, 1.0f, 0, 0,
-                InputDevice.SOURCE_MOUSE, 0);
-        try {
+                InputDevice.SOURCE_MOUSE, 0);        try {
             view.inject(event);
         } finally {
             event.recycle();
