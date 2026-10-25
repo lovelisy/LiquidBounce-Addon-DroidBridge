@@ -2,18 +2,12 @@ package liquidbounce.DroidBridge
 
 import net.ccbluex.liquidbounce.config.ConfigSystem
 import net.ccbluex.liquidbounce.event.EventListener
-import net.ccbluex.liquidbounce.event.events.ScreenEvent
-import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
-import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.integration.backend.BrowserBackend
 import net.ccbluex.liquidbounce.integration.backend.browser.BrowserSettings
 import net.ccbluex.liquidbounce.integration.backend.browser.BrowserViewport
 import net.ccbluex.liquidbounce.integration.backend.input.InputAcceptor
-import net.ccbluex.liquidbounce.integration.screen.ScreenManager
 import net.ccbluex.liquidbounce.integration.task.TaskManager
 import net.ccbluex.liquidbounce.utils.client.error.ErrorHandler
-import net.ccbluex.liquidbounce.utils.client.mc
-import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
 import net.ccbluex.liquidbounce.utils.kotlin.sortedInsert
 import org.apache.logging.log4j.LogManager
 
@@ -29,9 +23,6 @@ class WryBrowserBackend : BrowserBackend, EventListener {
         private set
     override val browsers = mutableListOf<WryBrowser>()
     override val supportsIncognito = true
-
-    private var dirtyVisible = false
-    private val dirtyVisibleBrowsers = mutableListOf<WryBrowser>()
 
     override fun makeDependenciesAvailable(taskManager: TaskManager, whenAvailable: () -> Unit) {
         runCatching {
@@ -66,55 +57,6 @@ class WryBrowserBackend : BrowserBackend, EventListener {
         }
     }
 
-    /**
-     * Marks every browser so its visibility is reevaluated on the next screen or world change,
-     * mirroring how the vanilla backend lets the renderer decide each frame while we only decide on
-     * events.
-     */
-    internal fun markVisibleDirty(browser: WryBrowser? = null) {
-        if (browser == null) {
-            dirtyVisible = true
-            return
-        }
-
-        dirtyVisibleBrowsers.add(browser)
-    }
-
-    private fun updateVisibleBrowsers() {
-        if (!dirtyVisible && dirtyVisibleBrowsers.isEmpty()) {
-            return
-        }
-
-        val clientScreen = ScreenManager.isClientScreen(mc.gui.screen())
-        val inGame = mc.player != null
-        val mainBrowser = ScreenManager.mainBrowser
-        val targets = if (dirtyVisible) {
-            dirtyVisible = false
-            dirtyVisibleBrowsers.clear()
-            browsers.toList()
-        } else {
-            val pending = dirtyVisibleBrowsers.toList()
-            dirtyVisibleBrowsers.clear()
-            pending
-        }
-
-        for (browser in targets) {
-            if (browser in browsers) {
-                browser.updateVisibility(clientScreen, inGame, mainBrowser === browser)
-            }
-        }
-    }
-
-    @Suppress("unused")
-    private val screenHandler = handler<ScreenEvent>(priority = READ_FINAL_STATE) {
-        markVisibleDirty()
-    }
-
-    @Suppress("unused")
-    private val worldChangeHandler = handler<WorldChangeEvent> {
-        markVisibleDirty()
-    }
-
     override fun update() {
         if (!isInitialized) {
             return
@@ -123,7 +65,9 @@ class WryBrowserBackend : BrowserBackend, EventListener {
         try {
             WryNative.update()
             pollEvents()
-            updateVisibleBrowsers()
+            for (browser in browsers) {
+                browser.updateFrame()
+            }
         } catch (e: Exception) {
             logger.error("Failed to update the browsers", e)
         }

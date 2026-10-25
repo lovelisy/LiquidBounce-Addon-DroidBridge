@@ -10,6 +10,7 @@ import net.ccbluex.liquidbounce.integration.backend.browser.GlobalBrowserSetting
 import net.ccbluex.liquidbounce.integration.backend.input.InputAcceptor
 import net.ccbluex.liquidbounce.integration.backend.input.InputHandler
 import net.ccbluex.liquidbounce.integration.backend.input.InputListener
+import net.ccbluex.liquidbounce.integration.screen.ScreenManager
 import net.ccbluex.liquidbounce.utils.client.mc
 import org.apache.logging.log4j.LogManager
 import org.joml.component1
@@ -49,8 +50,6 @@ class WryBrowser internal constructor(
         val (width, height) = size
         id = WryNative.createBrowser(url, width, height, quality.toDouble(), isIncognito, settings.currentFps)
 
-        backend.markVisibleDirty(this)
-
         logger.info("Initialized browser (url='$url')")
     }
 
@@ -87,12 +86,6 @@ class WryBrowser internal constructor(
         }
 
     override var visible = true
-        set(value) {
-            if (field != value) {
-                field = value
-                backend.markVisibleDirty(this)
-            }
-        }
 
     private val renderer = BrowserRenderer(this)
     private val inputListener: InputListener? = inputAcceptor?.let { InputListener(this, this, it) }
@@ -160,21 +153,26 @@ class WryBrowser internal constructor(
      * The web view is shown while a client screen owns the game, and hidden while the player is in the
      * world. [visible] only tells whether the screen that owns this tab asked for it; the main tab is
      * never asked, so it is shown whenever a client screen is open.
-     *
-     * Runs when visibility matters change (screens open or close, the player enters or leaves the
-     * world, a screen asks for [visible]), not every frame.
      */
-    internal fun updateVisibility(clientScreen: Boolean, inGame: Boolean, isMainBrowser: Boolean) {
+    private fun pushVisible() {
+        val clientScreen = ScreenManager.isClientScreen(mc.gui.screen())
         val show = if (priority > 0 || inputListener != null) {
-            clientScreen && (visible || isMainBrowser)
+            clientScreen && (visible || ScreenManager.mainBrowser === this)
         } else {
-            visible && (clientScreen || inGame)
+            visible && (clientScreen || mc.player != null)
         }
         if (show == shownScreen) {
             return
         }
         shownScreen = show
         onRenderThread { WryNative.setVisible(id, show) }
+    }
+
+    /**
+     * Pushes what the game tells the web view this frame.
+     */
+    internal fun updateFrame() {
+        pushVisible()
     }
 
     internal fun onEvent(event: WryEvent) {
