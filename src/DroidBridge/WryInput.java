@@ -214,13 +214,6 @@ final class WryInput {
     private static void button(WryView view, long downTime, int type, float x, float y, int button) {
         int state = button == 2 ? MotionEvent.BUTTON_SECONDARY
                 : button == 3 ? MotionEvent.BUTTON_TERTIARY : MotionEvent.BUTTON_PRIMARY;
-        int actionButton = 0;
-        if (type == MotionEvent.ACTION_BUTTON_PRESS) {
-            actionButton = state;
-        } else if (type == MotionEvent.ACTION_BUTTON_RELEASE) {
-            actionButton = state;
-            state = 0;
-        }
         if (!view.isFocused()) {
             view.requestFocus();
         }
@@ -236,15 +229,12 @@ final class WryInput {
         MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
         coords.x = x * width;
         coords.y = y * height;
-        coords.pressure = state != 0 ? 1f : 0f;
+        coords.pressure = type == MotionEvent.ACTION_UP ? 0f : 1f;
         MotionEvent event = MotionEvent.obtain(downTime, now, type, 1,
                 new MotionEvent.PointerProperties[]{properties},
                 new MotionEvent.PointerCoords[]{coords},
                 0, state, 1.0f, 1.0f, 0, 0,
                 InputDevice.SOURCE_MOUSE, 0);
-        if (actionButton != 0) {
-            event.setActionButton(actionButton);
-        }
         try {
             view.inject(event);
         } finally {
