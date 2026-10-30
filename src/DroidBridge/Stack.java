@@ -224,6 +224,8 @@ final class Stack {
             return;
         }
         entry.drawn = true;
+        view.evaluateJavascript(Scripts.width(view.getWidth()), null);
+        view.evaluateJavascript(Scripts.SCALE, null);
         show(entry);
     }
 
