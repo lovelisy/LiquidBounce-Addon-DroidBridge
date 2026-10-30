@@ -7,7 +7,7 @@ pub use android::Engine;
 
 use api::{Key, MouseButton, Pointer, StartOptions};
 use jni::objects::{JClass, JLongArray, JObject, JString};
-use jni::sys::{jboolean, jdouble, jint, jlong, jobjectArray};
+use jni::sys::{jboolean, jdouble, jfloat, jint, jlong, jobjectArray};
 use jni::JNIEnv;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::{Mutex, MutexGuard};
@@ -122,6 +122,15 @@ browser_call!(Java_liquidbounce_DroidBridge_WryNative_goBack() => |engine, env, 
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_goForward() => |engine, env, id| engine.go_forward(id));
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_resize(width: jint, height: jint, zoom: jdouble) =>
     |engine, env, id| engine.resize(id, width.max(1) as u32, height.max(1) as u32, zoom));
+
+#[no_mangle]
+pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_configure(mut env: JNIEnv, _: JClass,
+    clickgui: jfloat, hud: jfloat, settings: jfloat) {
+    with_engine(&mut env, |engine, _| {
+        engine.configure(clickgui, hud, settings);
+        Ok(())
+    })
+}
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_mouseMove(x: jdouble, y: jdouble) => |engine, env, id|
     engine.pointer(id, x, y, Pointer::Move));
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_mouseButton(x: jdouble, y: jdouble, button: jint,

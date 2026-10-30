@@ -7,7 +7,6 @@ import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
-import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -25,8 +24,35 @@ final class WryPages {
 
     private static String dataSuffix;
 
+    private static volatile float clickguiScale = 1f;
+
+    private static volatile float hudScale = 1f;
+
+    private static volatile float settingsScale = 1f;
+
     static Handler main() {
         return main;
+    }
+
+    static void configure(final float clickgui, final float hud, final float settings) {
+        clickguiScale = clickgui;
+        hudScale = hud;
+        settingsScale = settings;
+        if (main == null) {
+            return;
+        }
+        main.post(new Runnable() {
+            @Override
+            public void run() {
+                String script = WryScripts.config(clickguiScale, hudScale, settingsScale)
+                        + ";window.__wryScale&&window.__wryScale()";
+                for (WryPage page : WryStack.pages().values()) {
+                    if (page.view != null) {
+                        page.view.evaluateJavascript(script, null);
+                    }
+                }
+            }
+        });
     }
 
     static void start(Application app) {
@@ -68,6 +94,8 @@ final class WryPages {
                         entry.loaded = true;
                         entry.sent = false;
                     }
+                    target.evaluateJavascript(
+                            WryScripts.config(clickguiScale, hudScale, settingsScale), null);
                     target.evaluateJavascript(WryScripts.DISPATCH_SETUP, null);
                     target.evaluateJavascript(WryScripts.MASKS, null);
                     target.evaluateJavascript(WryScripts.SCALE, null);
@@ -78,16 +106,6 @@ final class WryPages {
                 @Override
                 public void onPageCommitVisible(WebView target, String page) {
                     WryStack.awaitVisualState(target);
-                }
-            });
-            view.setWebChromeClient(new WebChromeClient() {
-                @Override
-                public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
-                    if (message.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR) {
-                        WryLog.log("console " + message.message() + " @" + message.sourceId()
-                                + ":" + message.lineNumber());
-                    }
-                    return true;
                 }
             });
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
@@ -132,9 +150,24 @@ final class WryPages {
             if (code == null || code.isEmpty()) {
                 return;
             }
-            CookieManager.getInstance().setCookie(url, "lb_auth=" + code + "; path=/");
+            CookieManager manager = CookieManager.getInstance();
+            manager.setAcceptCookie(true);
+            manager.setCookie(origin(url), "lb_auth=" + code + "; path=/");
+            manager.flush();
         } catch (Throwable ignored) {
         }
+    }
+
+    private static String origin(String url) {
+        if (url == null) {
+            return "";
+        }
+        int mark = url.indexOf("://");
+        if (mark < 0) {
+            return url;
+        }
+        int slash = url.indexOf('/', mark + 3);
+        return slash < 0 ? url : url.substring(0, slash);
     }
 
     private static String query(String url, String name) {

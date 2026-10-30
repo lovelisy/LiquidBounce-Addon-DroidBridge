@@ -251,6 +251,31 @@ impl Bridge {
         read(&mut env, report)
     }
 
+    pub fn configure(&self, clickgui: f32, hud: f32, settings: f32) -> api::Result<()> {
+        let mut env = self
+            .vm
+            .attach_current_thread_permanently()
+            .map_err(|error| format!("attaching to ART failed: {error}"))?;
+
+        let class = unsafe { JClass::from_raw(self.class.as_raw()) };
+        jni!(
+            env,
+            env.call_static_method(
+                class,
+                "configure",
+                "(FFF)V",
+                &[
+                    JValue::Float(clickgui),
+                    JValue::Float(hud),
+                    JValue::Float(settings),
+                ],
+            ),
+            "WryBridge.configure"
+        );
+
+        Ok(())
+    }
+
     pub fn pointer(&self, id: i64, nx: f64, ny: f64, action: i32, button: i32, amount: f64)
         -> api::Result<()> {
         let mut env = self
@@ -356,28 +381,6 @@ impl Bridge {
         .map_err(|error| format!("WryBridge.loaded returned nothing: {error}"))?;
 
         Ok(value)
-    }
-
-    pub fn poll_logs(&self) -> api::Result<Vec<String>> {
-        let mut env = self
-            .vm
-            .attach_current_thread_permanently()
-            .map_err(|error| format!("attaching to ART failed: {error}"))?;
-
-        let class = unsafe { JClass::from_raw(self.class.as_raw()) };
-        let drained = jni!(
-            env,
-            env.call_static_method(class, "drainLogs", "()Ljava/lang/String;", &[]),
-            "WryBridge.drainLogs"
-        )
-        .l()
-        .map_err(|error| format!("WryBridge.drainLogs returned nothing: {error}"))?;
-
-        let text = read(&mut env, drained)?;
-        if text.is_empty() {
-            return Ok(Vec::new());
-        }
-        Ok(text.split('\n').map(str::to_string).collect())
     }
 
     fn activity<'a>(&self, mut env: &mut jni::JNIEnv<'a>) -> api::Result<JObject<'a>> {

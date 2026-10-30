@@ -107,6 +107,9 @@ internal object WryNative {
     external fun resize(id: Long, width: Int, height: Int, zoom: Double)
 
     @JvmStatic
+    external fun configure(clickgui: Float, hud: Float, settings: Float)
+
+    @JvmStatic
     external fun mouseMove(id: Long, x: Double, y: Double)
 
     /**

@@ -45,6 +45,7 @@ class WryBrowserBackend : BrowserBackend, EventListener {
             ErrorHandler.fatal(error = it, additionalMessage = "Starting DroidBridge")
         }
         isInitialized = true
+        DroidBridgeSettings.apply()
         pollEvents()
         logger.info("Pages are drawn by the web view of the system")
     }

@@ -19,6 +19,10 @@ public final class WryBridge {
         return WryPages.prepareDataDirectory(app, suffix);
     }
 
+    public static void configure(final float clickgui, final float hud, final float settings) {
+        WryPages.configure(clickgui, hud, settings);
+    }
+
     public static String create(final Activity activity, final long id, final String url) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             return WryPages.add(activity, id, url);
@@ -179,10 +183,6 @@ public final class WryBridge {
             }
         });
         return WryPages.await(latch, outcome);
-    }
-
-    public static String drainLogs() {
-        return WryLog.drain();
     }
 
     private WryBridge() {

@@ -4,8 +4,6 @@ mod bridge;
 use crate::api::{self, BrowserId, BrowserOptions, Key, MouseButton, Pointer, StartOptions};
 use std::collections::HashMap;
 
-const LOG_INTERVAL: u32 = 15;
-
 struct Page {
     viewport: (u32, u32),
     url: String,
@@ -16,7 +14,6 @@ pub struct Engine {
     bridge: Option<bridge::Bridge>,
     next: BrowserId,
     pages: HashMap<BrowserId, Page>,
-    tick: u32,
 }
 
 impl Engine {
@@ -25,7 +22,7 @@ impl Engine {
         let bridge = bridge::Bridge::attach(vm, &options.data_dir)?;
         let report = bridge.start()?;
         api::info(format!("[Wry] {report}"));
-        Ok(Self { bridge: Some(bridge), next: 1, pages: HashMap::new(), tick: 0 })
+        Ok(Self { bridge: Some(bridge), next: 1, pages: HashMap::new() })
     }
 
     pub fn stop(&mut self) {
@@ -38,21 +35,9 @@ impl Engine {
     }
 
     pub fn update(&mut self) {
-        let bridge = match self.bridge.as_ref() {
-            Some(bridge) => bridge,
-            None => return,
+        let Some(bridge) = self.bridge.as_ref() else {
+            return;
         };
-        self.tick = self.tick.wrapping_add(1);
-        if self.tick % LOG_INTERVAL == 0 {
-            match bridge.poll_logs() {
-                Ok(lines) => {
-                    for line in lines {
-                        api::info(format!("[Wry] {line}"));
-                    }
-                }
-                Err(error) => api::warn(format!("[Wry] reading the web view log failed: {error}")),
-            }
-        }
         for (id, page) in self.pages.iter_mut() {
             if page.announced {
                 continue;
@@ -101,12 +86,20 @@ impl Engine {
     }
 
     pub fn set_visible(&mut self, id: BrowserId, visible: bool) {
-        api::info(format!("[Wry] browser {id} visibility {visible}"));
         let Some(bridge) = self.bridge.as_ref() else {
             return;
         };
         if let Err(error) = bridge.set_visible(id as i64, visible) {
             api::warn(format!("[Wry] setting the web view visibility failed: {error}"));
+        }
+    }
+
+    pub fn configure(&mut self, clickgui: f32, hud: f32, settings: f32) {
+        let Some(bridge) = self.bridge.as_ref() else {
+            return;
+        };
+        if let Err(error) = bridge.configure(clickgui, hud, settings) {
+            api::warn(format!("[Wry] configuring the page scale failed: {error}"));
         }
     }
 

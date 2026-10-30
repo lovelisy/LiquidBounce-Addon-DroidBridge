@@ -184,10 +184,7 @@ class WryBrowser internal constructor(
             WryNative.EVENT_URL -> if (event.text.isNotEmpty()) {
                 currentUrl = event.text
             }
-            WryNative.EVENT_CONSOLE -> {
-                val text = "[console] ${event.text}"
-                if (event.code >= 2) logger.warn(text) else logger.debug(text)
-            }
+            WryNative.EVENT_CONSOLE -> Unit
             WryNative.EVENT_CURSOR -> if (visible) {
                 mc.window.selectCursor(WryInput.cursor(event.text))
             }
