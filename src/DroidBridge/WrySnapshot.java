@@ -19,11 +19,21 @@ import android.os.SystemClock;
 final class WrySnapshot {
 
     /**
-     * How often a page is read, in milliseconds. Drawing a page is a software draw of the whole
-     * view on the render thread of the game, so it costs a large share of a frame; the hud is mostly
-     * numbers that change slowly and does not need more.
+     * How often a page is read while it keeps changing, in milliseconds. Drawing a page is a
+     * software draw of the whole view on the render thread of the game, so it costs a large share of
+     * a frame.
      */
-    private static final long INTERVAL_MS = 200L;
+    private static final long MIN_INTERVAL_MS = 200L;
+
+    /**
+     * How often a page that stopped changing is read, in milliseconds. The hud is still mostly
+     * numbers that change slowly, so a still page costs almost nothing.
+     */
+    private static final long MAX_INTERVAL_MS = 500L;
+
+    private static long interval = MIN_INTERVAL_MS;
+
+    private static int lastHash = 0;
 
     /**
      * The width and the height as two little-endian shorts, the milliseconds the draw took, the number
@@ -68,8 +78,11 @@ final class WrySnapshot {
                 if (!page.ticking) {
                     return;
                 }
-                page.frame = read(page);
-                handler.postDelayed(this, INTERVAL_MS);
+                byte[] frame = read(page);
+                if (frame != null) {
+                    page.frame = frame;
+                }
+                handler.postDelayed(this, interval);
             }
         });
     }
@@ -82,25 +95,15 @@ final class WrySnapshot {
         page.frame = NONE;
     }
 
-    /**
-     * The last frame of [page], the header first.
-     */
-    static byte[] latest(WryPage page) {
-        if (page == null || page.frame == null) {
-            return NONE;
-        }
-        return page.frame;
-    }
-
     private static byte[] read(WryPage page) {
         WryView view = page.view;
         if (view == null || !page.loaded) {
-            return NONE;
+            return null;
         }
         int width = view.getWidth();
         int height = view.getHeight();
         if (width <= 0 || height <= 0) {
-            return NONE;
+            return null;
         }
         long begin = SystemClock.uptimeMillis();
         try {
@@ -111,10 +114,21 @@ final class WrySnapshot {
                 bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
                 canvas = new Canvas(bitmap);
                 pixels = new int[width * height];
+                lastHash = 0;
             }
             bitmap.eraseColor(0);
             view.draw(canvas);
             bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
+            int hash = 1;
+            for (int texel = 0; texel < pixels.length; texel += 4) {
+                hash = hash * 31 + pixels[texel];
+            }
+            if (hash == lastHash) {
+                interval = Math.min(MAX_INTERVAL_MS, interval * 2);
+                return null;
+            }
+            lastHash = hash;
+            interval = MIN_INTERVAL_MS;
             byte[] rgba = new byte[width * height * 4 + HEADER];
             int painted = 0;
             for (int texel = 0; texel < pixels.length; texel++) {
@@ -150,8 +164,21 @@ final class WrySnapshot {
             WryPages.metric(width, height, took, painted);
             return rgba;
         } catch (Throwable error) {
-            return NONE;
+            return null;
         }
+    }
+
+    /**
+     * The read counter of a frame, which only changes when the page drew something new.
+     */
+    static int version(byte[] frame) {
+        if (frame == null || frame.length < HEADER) {
+            return -1;
+        }
+        return (frame[12] & 0xff)
+                | ((frame[13] & 0xff) << 8)
+                | ((frame[14] & 0xff) << 16)
+                | ((frame[15] & 0xff) << 24);
     }
 
 }

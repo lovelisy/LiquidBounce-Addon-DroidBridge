@@ -275,7 +275,7 @@ impl Bridge {
     }
 
     /// The last frame of a page, the header of the Java side first.
-    pub fn snapshot(&self, id: i64) -> api::Result<Vec<u8>> {
+    pub fn snapshot(&self, id: i64, last_version: i32) -> api::Result<Vec<u8>> {
         let mut env = self
             .vm
             .attach_current_thread_permanently()
@@ -284,7 +284,12 @@ impl Bridge {
         let class = unsafe { JClass::from_raw(self.class.as_raw()) };
         let frame = jni!(
             env,
-            env.call_static_method(class, "snapshot", "(J)[B", &[JValue::Long(id)]),
+            env.call_static_method(
+                class,
+                "snapshot",
+                "(JI)[B",
+                &[JValue::Long(id), JValue::Int(last_version)],
+            ),
             "WryBridge.snapshot"
         )
         .l()

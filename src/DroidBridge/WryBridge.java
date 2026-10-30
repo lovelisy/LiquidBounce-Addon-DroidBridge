@@ -100,10 +100,19 @@ public final class WryBridge {
     }
 
     /**
-     * The last frame of a page that is drawn on a texture, see [WrySnapshot].
+     * The last frame of a page that is drawn on a texture, or null when it drew nothing new since
+     * [lastVersion]. Comparing the version here is what keeps a still page from copying its whole
+     * frame every frame of the game.
      */
-    public static byte[] snapshot(final long id) {
-        return WrySnapshot.latest(WryStack.page(id));
+    public static byte[] snapshot(final long id, final int lastVersion) {
+        WryPage page = WryStack.page(id);
+        if (page == null || page.frame == null) {
+            return null;
+        }
+        if (WrySnapshot.version(page.frame) == lastVersion) {
+            return null;
+        }
+        return page.frame;
     }
 
     public static void pointer(final long id, final float x, final float y, final int action,

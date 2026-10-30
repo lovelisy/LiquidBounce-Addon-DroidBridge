@@ -165,12 +165,12 @@ pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_setTexture(mut en
 /// The last frame of a page that is drawn on a texture, or null when there is none.
 #[no_mangle]
 pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_snapshot(mut env: JNIEnv, _: JClass,
-    id: jlong) -> jni::sys::jbyteArray {
+    id: jlong, last_version: jint) -> jni::sys::jbyteArray {
     guard(&mut env, |env| {
         let frame = {
             let mut shared = engine();
             let engine = shared.0.as_mut().ok_or("DroidBridge is not started")?;
-            engine.snapshot(id as api::BrowserId)
+            engine.snapshot(id as api::BrowserId, last_version)
         };
         if frame.is_empty() {
             return Ok(std::ptr::null_mut());

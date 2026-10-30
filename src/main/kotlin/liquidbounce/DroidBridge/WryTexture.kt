@@ -37,7 +37,7 @@ internal class WryTexture(private val id: Long) {
 
     private var height = 0
 
-    private var stamp = -1L
+    private var stamp = -1
 
     private var took = 0
 
@@ -52,7 +52,7 @@ internal class WryTexture(private val id: Long) {
         private set
 
     fun poll() {
-        val frame = WryNative.snapshot(id) ?: return
+        val frame = WryNative.snapshot(id, stamp) ?: return
         if (frame.size <= HEADER) {
             return
         }
@@ -61,15 +61,9 @@ internal class WryTexture(private val id: Long) {
         if (sourceWidth <= 0 || sourceHeight <= 0 || frame.size != sourceWidth * sourceHeight * PIXELS + HEADER) {
             return
         }
-        val tookMs = readInt(frame, 4)
-        val paintedPixels = readInt(frame, 8)
-        val counter = readInt(frame, 12)
-        if (stamp == counter.toLong() && sourceWidth == width && sourceHeight == height) {
-            return
-        }
-        stamp = counter.toLong()
-        took = tookMs
-        painted = paintedPixels
+        took = readInt(frame, 4)
+        painted = readInt(frame, 8)
+        stamp = readInt(frame, 12)
         upload(frame, sourceWidth, sourceHeight)
         report()
     }
@@ -113,7 +107,7 @@ internal class WryTexture(private val id: Long) {
     fun close() {
         drop()
         browserTexture = null
-        stamp = -1L
+        stamp = -1
     }
 
     private fun report() {

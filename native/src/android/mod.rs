@@ -104,11 +104,11 @@ impl Engine {
     }
 
     /// The last frame of a page that is drawn on a texture, or an empty vector when there is none.
-    pub fn snapshot(&mut self, id: BrowserId) -> Vec<u8> {
+    pub fn snapshot(&mut self, id: BrowserId, last_version: i32) -> Vec<u8> {
         let Some(bridge) = self.bridge.as_ref() else {
             return Vec::new();
         };
-        match bridge.snapshot(id as i64) {
+        match bridge.snapshot(id as i64, last_version) {
             Ok(frame) => frame,
             Err(error) => {
                 api::warn(format!("[Wry] reading a frame of the web view failed: {error}"));
