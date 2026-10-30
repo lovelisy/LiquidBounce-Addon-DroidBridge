@@ -177,7 +177,9 @@ pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_snapshot(mut env:
         }
         let err = |e: jni::errors::Error| e.to_string();
         let array = env.new_byte_array(frame.len() as jint).map_err(err)?;
-        env.set_byte_array_region(&array, 0, &frame).map_err(err)?;
+        let region: &[i8] =
+            unsafe { std::slice::from_raw_parts(frame.as_ptr() as *const i8, frame.len()) };
+        env.set_byte_array_region(&array, 0, region).map_err(err)?;
         Ok(array.into_raw())
     })
 }
