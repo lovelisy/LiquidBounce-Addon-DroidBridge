@@ -80,43 +80,27 @@ final class WryScripts {
                     + "})()";
 
     /**
-     * Design size of the LiquidBounce theme (desktop). Fit = min(viewport/design).
-     * On a phone the same CSS pixel sizes occupy far more of the screen; fitting the
-     * viewport back to this design is what keeps ClickGUI / HUD from looking blown up.
-     */
-    private static final int DESKTOP_WIDTH = 1600;
-
-    private static final int DESKTOP_HEIGHT = 900;
-
-    private static final float MIN_FIT = 0.25f;
-
-    private static final float SETTINGS_FIT = 1f;
-
-    private static final int MENU_HEIGHT = 1125;
-
-    private static final float MENU_FIT = 0.25f;
-
-    /**
+     * The theme is written for the desktop browser, which lays a page out in pixels of the
+     * framebuffer. The web view of Android lays it out in density independent pixels instead, so
+     * the same css pixel covers as many device pixels as the density says: panels grow, the hud
+     * components grow and the settings window keeps its pixel width on a screen that has more.
+     *
+     * WryPages declares the page as wide as the screen before it loads, which turns one css pixel
+     * back into one framebuffer pixel and lets the theme behave as it does on the desktop. The
+     * values below are therefore in the same unit they have on the desktop and need no fit of
+     * their own.
+     *
      * Theme layout reference (LiquidBounce src-theme):
      * - ScaledClickGuiContent.svelte: .scaled-clickgui-content { transform: scale(scaleFactor*50%) }
      * - Search.svelte: .search { position:fixed; left:50%; top:70px; transform:translateX(-50%) }
      * - Hud.svelte: .hud { zoom: scaleFactor*50% }
      *
-     * Stock SCALE only zoomed tabs/search/drawer chrome, so panels stayed desktop-sized on a
-     * phone. Panels live under .scaled-clickgui-content; that node must take the fit as well.
-     * Search is moved from top:70px to the bottom of the viewport.
-     * The hud is left to the theme: Hud.svelte sets zoom = scaleFactor*50% and its
-     * DraggableComponent derives the coordinates from the same factor. Only a HudScale value
-     * other than 1 overrides that zoom.
+     * Panels live under .scaled-clickgui-content and are sized in those pixels, so that node keeps
+     * the scale of the theme and is only widened when the panels need more room than the viewport
+     * has. Search is moved from top:70px to the bottom of the viewport, where the thumbs are.
      */
     static final String SCALE =
             "(function(){"
-                    + "var W=" + DESKTOP_WIDTH + ";"
-                    + "var H=" + DESKTOP_HEIGHT + ";"
-                    + "var MIN=" + MIN_FIT + ";"
-                    + "var SET=" + SETTINGS_FIT + ";"
-                    + "var MH=" + MENU_HEIGHT + ";"
-                    + "var MF=" + MENU_FIT + ";"
                     + "function cfg(name,fallback){"
                     + "var c=window.__wryCfg;"
                     + "if(!c){return fallback;}"
@@ -124,27 +108,20 @@ final class WryScripts {
                     + "if(!isFinite(v)||v<=0){return fallback;}"
                     + "return v;"
                     + "}"
-                    + "function fit(){"
-                    + "var w=window.innerWidth||W;"
-                    + "var h=window.innerHeight||H;"
-                    + "var f=Math.min(w/W,h/H);"
-                    + "if(!isFinite(f)||f<=0){return 1;}"
-                    + "return Math.min(1,Math.max(MIN,f));"
-                    + "}"
                     + "function ratio(raw){"
                     + "var v=parseFloat(raw);"
                     + "if(!isFinite(v)||v<=0){return 0;}"
                     + "return raw.indexOf('%')>=0?v/100:v;"
                     + "}"
-                    + "function clickgui(f){"
+                    + "function clickgui(){"
                     + "var css='';"
                     + "var c=cfg('clickgui',1);"
                     + "var s=cfg('settings',1);"
-                    + "css+='.available-tabs{zoom:'+(f*c)+';}';"
-                    + "css+='.component-drawer{zoom:'+(f*c)+';}';"
+                    + "css+='.available-tabs{zoom:'+c+';}';"
+                    + "css+='.component-drawer{zoom:'+c+';}';"
                     + "var hudResult=null;"
                     + "if(document.querySelector('.hud')){"
-                    + "hudResult=hud(true);css+=hudResult.css;"
+                    + "hudResult=hud();css+=hudResult.css;"
                     + "}"
                     + "var sc=document.querySelector('.scaled-clickgui-content');"
                     + "if(sc){"
@@ -163,17 +140,17 @@ final class WryScripts {
                     + "if(r>right){right=r;}"
                     + "if(b>bottom){bottom=b;}"
                     + "}"
-                    + "var vw=window.innerWidth||W;"
-                    + "var vh=window.innerHeight||H;"
-                    + "var w=Math.max(2/sf*vw,right+20);"
-                    + "var h=Math.max(2/sf*vh,bottom+20);"
-                    + "var zoom=Math.min(vw/w,vh/h)*c;"
+                    + "var vw=window.innerWidth||0;"
+                    + "var vh=window.innerHeight||0;"
+                    + "var zoom=Math.min(sf/2,vw/(right+20),vh/(bottom+20))*c;"
+                    + "if(!(zoom>0)){zoom=sf/2;}"
+                    + "var w=Math.max(right+20,vw/zoom);"
+                    + "var h=Math.max(bottom+20,vh/zoom);"
                     + "css+='.scaled-clickgui-content{width:'+w+'px!important;height:'+h"
                     + "+'px!important;transform:scale('+zoom+')!important;}';"
                     + "}"
                     + "}"
-                    + "css+='.window{zoom:'+(f*s*SET)+';}';"
-
+                    + "css+='.window{zoom:'+s+';}';"
                     + "css+='.search{"
                     + "position:fixed!important;"
                     + "left:50%!important;"
@@ -181,73 +158,31 @@ final class WryScripts {
                     + "top:auto!important;"
                     + "bottom:20px!important;"
                     + "transform:translateX(-50%)!important;"
-                    + "zoom:'+(f*c)+';"
+                    + "zoom:'+c+';"
                     + "z-index:9999999999!important;"
                     + "}';"
-                    + "return {css:css,log:'clickgui chrome '+f};"
+                    + "return {css:css,log:'clickgui x'+c};"
                     + "}"
-                    + "function hud(editor){"
-                    + "if(editor){return {css:'',log:'hud editor native'};}"
+                    + "function hud(){"
                     + "var el=document.querySelector('.hud');"
                     + "if(!el){return {css:'',log:'hud pending'};}"
                     + "var z=ratio(el.style?el.style.zoom:'');"
                     + "if(!z){return {css:'',log:'hud native'};}"
-                    + "var dpr=window.devicePixelRatio||1;"
                     + "var c=cfg('hud',1);"
-                    + "if(dpr===1&&c===1){return {css:'',log:'hud native '+z};}"
-                    + "var vw=window.innerWidth||W;"
-                    + "var vh=window.innerHeight||H;"
-                    + "var w=Math.round(vw*dpr);"
-                    + "var h=Math.round(vh*dpr);"
-                    + "var zoom=z/dpr*c;"
-                    + "var css='html,body{margin:0!important;overflow:hidden!important;}';"
-                    + "css+='#app{width:'+w+'px!important;height:'+h+'px!important;}';"
-                    + "css+='.hud{position:relative!important;width:'+w+'px!important;height:'+h"
-                    + "+'px!important;zoom:'+zoom.toFixed(6)+'!important;}';"
-                    + "css+='.hud .draggable-element{position:absolute!important;}';"
-                    + "return {css:css,log:'hud '+w+'x'+h+' zoom '+zoom.toFixed(6)};"
-                    + "}"
-                    + "function guessBase(w,h){"
-                    + "var z=1;"
-                    + "if(w<=1366){z=0.8;}"
-                    + "if(w<=1200){z=0.5;}"
-                    + "if(h<=1100){z=0.8;}"
-                    + "if(h<=700){z=0.5;}"
-                    + "if(h<=540){z=0.4;}"
-                    + "return z;"
-                    + "}"
-                    + "function menuBase(){"
-                    + "var me=document.querySelector('.menu');"
-                    + "var w=window.innerWidth||W;"
-                    + "var h=window.innerHeight||H;"
-                    + "if(!me){return guessBase(w,h);}"
-                    + "var cached=window.__wryMenuBase;"
-                    + "if(cached){return cached;}"
-                    + "var style=document.getElementById('wry-scale');"
-                    + "var saved=style?style.textContent:'';"
-                    + "if(style&&saved.indexOf('.menu{zoom')>=0){style.textContent='';}"
-                    + "var base=ratio(getComputedStyle(me).zoom);"
-                    + "if(style&&saved){style.textContent=saved;}"
-                    + "if(!base){base=guessBase(w,h);}"
-                    + "window.__wryMenuBase=base;"
-                    + "return base;"
+                    + "if(c===1){return {css:'',log:'hud native '+z};}"
+                    + "return {css:'.hud{zoom:'+(z*c).toFixed(6)+'!important;}',"
+                    + "log:'hud '+z+'x'+c};"
                     + "}"
                     + "function menu(){"
-                    + "var base=menuBase();"
-                    + "if(!base){return {css:'',log:'menu pending'};}"
-                    + "var h=window.innerHeight||H;"
-                    + "var room=h/MH;"
-                    + "var want=Math.min(base,Math.max(MF,room));"
-                    + "if(want>=base){return {css:'',log:'menu '+base+' fits'};}"
-                    + "return {css:'.menu{zoom:'+want.toFixed(3)+'!important;}',"
-                    + "log:'menu '+base+'->'+want.toFixed(3)};"
+                    + "return {css:'.menu>div:first-child,.menu .main-button,"
+                    + ".menu .additional-buttons,.menu .social-buttons{"
+                    + "transform:none!important;opacity:1!important;}',log:'menu'};"
                     + "}"
                     + "window.__wryScale=function(){"
                     + "var route=location.hash||'';"
-                    + "var f=fit();"
                     + "var result;"
-                    + "if(route.indexOf('/clickgui')>=0){result=clickgui(f);}"
-                    + "else if(route.indexOf('/hud')>=0||route.indexOf('/inventory')>=0){result=hud(false);}"
+                    + "if(route.indexOf('/clickgui')>=0){result=clickgui();}"
+                    + "else if(route.indexOf('/hud')>=0||route.indexOf('/inventory')>=0){result=hud();}"
                     + "else{result=menu();}"
                     + "var style=document.getElementById('wry-scale');"
                     + "if(!style){style=document.createElement('style');style.id='wry-scale';"
@@ -258,16 +193,7 @@ final class WryScripts {
                     + "if(!window.__wryScaleHooked){"
                     + "window.__wryScaleHooked=true;"
                     + "window.addEventListener('hashchange',function(){window.__wryScale();});"
-                    + "window.addEventListener('resize',function(){"
-                    + "window.__wryMenuBase=0;window.__wryScale();});"
-                    + "if(window.MutationObserver&&document.documentElement){"
-                    + "window.__wryMenuObserver=new MutationObserver(function(){"
-                    + "var present=!!document.querySelector('.menu');"
-                    + "if(present===window.__wryMenuPresent){return;}"
-                    + "window.__wryMenuPresent=present;"
-                    + "if(present){window.__wryScale();}"
-                    + "});"
-                    + "window.__wryMenuObserver.observe(document.body,{childList:true,subtree:true});"
+                    + "window.addEventListener('resize',function(){window.__wryScale();});"
                     + "window.__wryPanelTimer=setInterval(function(){"
                     + "var hash=location.hash||'';"
                     + "if(hash.indexOf('/clickgui')<0&&hash.indexOf('/hud')<0"
@@ -288,7 +214,6 @@ final class WryScripts {
                     + "}"
                     + "});"
                     + "window.__wryHudFitObserver.observe(document.documentElement,{childList:true,subtree:true});"
-                    + "}"
                     + "}"
                     + "return window.__wryScale();"
                     + "})()";

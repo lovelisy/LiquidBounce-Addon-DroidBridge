@@ -7,13 +7,22 @@ import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * The pages themselves: creating one, showing it and taking it down again.
@@ -59,6 +68,120 @@ final class WryPages {
         main = new Handler(Looper.getMainLooper());
     }
 
+    private static final Pattern VIEWPORT = Pattern.compile(
+            "(?i)<meta[^>]*name\\s*=\\s*[\"']viewport[\"'][^>]*>");
+
+    /**
+     * A desktop browser lays a page out in pixels of the framebuffer, which is the unit the theme
+     * writes. The web view of Android lays it out in density independent pixels instead, so a panel
+     * the theme makes 250 px wide arrives as many device pixels wide as the density says, the hud
+     * components grow by that factor and the coordinates the theme derives from the viewport shrink
+     * by it. Telling the page that it is as wide as the screen is what gives the theme back the unit
+     * it was written for, and it is the only place where size and position can be fixed together.
+     */
+    private static int framebufferWidth(Activity activity) {
+        try {
+            int width = activity.getResources().getDisplayMetrics().widthPixels;
+            return width > 0 ? width : 1600;
+        } catch (Throwable error) {
+            return 1600;
+        }
+    }
+
+    /**
+     * Reads the page the game is about to show and hands it to the web view with the viewport of
+     * the screen. Anything unexpected makes this load the page itself, which is what the web view
+     * does without this hook, so a page that cannot be read still arrives unchanged.
+     */
+    private static WebResourceResponse withViewport(WebResourceRequest request, int viewport) {
+        HttpURLConnection connection = null;
+        try {
+            String url = request.getUrl() == null ? null : request.getUrl().toString();
+            if (url == null || !"GET".equalsIgnoreCase(request.getMethod())) {
+                return null;
+            }
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setConnectTimeout(8000);
+            connection.setReadTimeout(8000);
+            connection.setUseCaches(false);
+            connection.setInstanceFollowRedirects(true);
+            connection.setRequestProperty("Accept-Encoding", "identity");
+            String cookie = CookieManager.getInstance().getCookie(url);
+            if (cookie != null && cookie.length() > 0) {
+                connection.setRequestProperty("Cookie", cookie);
+            }
+            if (connection.getResponseCode() != 200) {
+                return null;
+            }
+            String type = connection.getContentType();
+            if (type == null || type.toLowerCase().indexOf("html") < 0) {
+                return null;
+            }
+            if (connection.getContentEncoding() != null) {
+                return null;
+            }
+            keepResponseCookies(connection);
+            String html = read(connection.getInputStream());
+            String meta = "<meta name=\"viewport\" content=\"width=" + viewport
+                    + ",user-scalable=no\">";
+            Matcher matcher = VIEWPORT.matcher(html);
+            String page;
+            if (matcher.find()) {
+                page = matcher.replaceFirst(Matcher.quoteReplacement(meta));
+            } else {
+                int head = html.toLowerCase().indexOf("<head>");
+                if (head < 0) {
+                    return null;
+                }
+                page = html.substring(0, head + 6) + meta + html.substring(head + 6);
+            }
+            return new WebResourceResponse("text/html", "utf-8",
+                    new ByteArrayInputStream(page.getBytes("UTF-8")));
+        } catch (Throwable error) {
+            return null;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    /**
+     * The page is fetched here instead of by the web view, so the cookie the server sets on the way
+     * has to be handed to the store as well, or the calls the page makes afterwards are anonymous.
+     */
+    private static void keepResponseCookies(HttpURLConnection connection) {
+        try {
+            CookieManager manager = CookieManager.getInstance();
+            for (java.util.Map.Entry<String, java.util.List<String>> header : connection.getHeaderFields().entrySet()) {
+                if (header.getKey() == null || !"Set-Cookie".equalsIgnoreCase(header.getKey())) {
+                    continue;
+                }
+                for (String value : header.getValue()) {
+                    if (value != null && value.length() > 0) {
+                        manager.setCookie(origin(connection.getURL().toString()), value);
+                    }
+                }
+            }
+            manager.flush();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static String read(InputStream stream) throws Exception {
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            byte[] chunk = new byte[8192];
+            int count;
+            while ((count = stream.read(chunk)) > 0) {
+                buffer.write(chunk, 0, count);
+            }
+            return buffer.toString("UTF-8");
+        } finally {
+            stream.close();
+        }
+    }
+
     /**
      * The web view keeps one data directory per process, and the game shares its process with the
      * launcher, so the bridge asks for a directory of its own before the first web view exists.
@@ -86,7 +209,19 @@ final class WryPages {
             view.getSettings().setJavaScriptEnabled(true);
             view.getSettings().setDomStorageEnabled(true);
             view.getSettings().setSupportZoom(false);
+            view.getSettings().setUseWideViewPort(true);
+            view.getSettings().setLoadWithOverviewMode(true);
+            final int viewport = framebufferWidth(activity);
             view.setWebViewClient(new WebViewClient() {
+
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView target, WebResourceRequest request) {
+                    if (request == null || !request.isForMainFrame()) {
+                        return null;
+                    }
+                    return withViewport(request, viewport);
+                }
+
                 @Override
                 public void onPageFinished(WebView target, String page) {
                     WryPage entry = WryStack.page(id);
