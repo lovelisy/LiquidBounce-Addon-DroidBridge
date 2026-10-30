@@ -123,7 +123,7 @@ final class Pages {
             keepResponseCookies(connection);
             String html = read(connection.getInputStream());
             String meta = "<meta name=\"viewport\" content=\"width=" + viewport
-                    + ",user-scalable=no\">";
+                    + ",user-scalable=no\"><style>.menu{zoom:0.4!important}</style>";
             Matcher matcher = VIEWPORT.matcher(html);
             String page;
             if (matcher.find()) {
