@@ -232,10 +232,14 @@ final class Stack {
      * view.
      */
     static void show(Page page) {
-        if (!page.wanted || page.view == null || page.view.getVisibility() == View.VISIBLE) {
+        if (!page.wanted || page.view == null) {
+            return;
+        }
+        if (page.view.getVisibility() == View.VISIBLE && page.view.getAlpha() == 1f) {
             return;
         }
         page.view.setVisibility(View.VISIBLE);
+        page.view.setAlpha(1f);
         place(page.view);
     }
 

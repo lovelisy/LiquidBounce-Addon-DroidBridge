@@ -262,7 +262,7 @@ final class Pages {
             Page created = new Page(id, view, layer);
             Stack.put(created);
             String stacking = Stack.place(view);
-            view.setVisibility(View.INVISIBLE);
+            view.setAlpha(0f);
             view.setFocusable(true);
             view.setFocusableInTouchMode(true);
             view.setOnFocusChangeListener(null);
