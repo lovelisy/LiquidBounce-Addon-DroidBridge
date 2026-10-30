@@ -70,12 +70,11 @@ internal class WryTexture(private val id: Long) {
         stamp = counter.toLong()
         took = tookMs
         painted = paintedPixels
-        val pixels = frame.copyOfRange(HEADER, frame.size)
-        upload(pixels, sourceWidth, sourceHeight)
+        upload(frame, sourceWidth, sourceHeight)
         report()
     }
 
-    private fun upload(pixels: ByteArray, sourceWidth: Int, sourceHeight: Int) {
+    private fun upload(frame: ByteArray, sourceWidth: Int, sourceHeight: Int) {
         if (texture == null || width != sourceWidth || height != sourceHeight) {
             drop()
             val created = gpuDevice.createTexture(
@@ -94,13 +93,12 @@ internal class WryTexture(private val id: Long) {
             height = sourceHeight
         }
         val target = texture ?: return
-        val buffer = (direct?.takeIf { it.capacity() >= pixels.size }
-            ?: ByteBuffer.allocateDirect(pixels.size).also { direct = it })
-            .apply {
-                position(0)
-                put(pixels)
-                position(0)
-            }
+        val texelBytes = sourceWidth * sourceHeight * PIXELS
+        val buffer = (direct?.takeIf { it.capacity() >= texelBytes }
+            ?: ByteBuffer.allocateDirect(texelBytes).also { direct = it })
+        buffer.clear()
+        buffer.put(frame, HEADER, texelBytes)
+        buffer.position(0)
         val encoder = gpuDevice.createCommandEncoder()
         val slice = encoder.transientMemory().uploadStaging(buffer, 1L, GpuBuffer.USAGE_COPY_SRC)
         encoder.copyBufferToTexture(

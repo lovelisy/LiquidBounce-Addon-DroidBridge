@@ -20,10 +20,10 @@ final class WrySnapshot {
 
     /**
      * How often a page is read, in milliseconds. Drawing a page is a software draw of the whole
-     * view, which costs more than a frame of the game, and the hud is mostly numbers that change
-     * slowly.
+     * view on the render thread of the game, so it costs a large share of a frame; the hud is mostly
+     * numbers that change slowly and does not need more.
      */
-    private static final long INTERVAL_MS = 50L;
+    private static final long INTERVAL_MS = 200L;
 
     /**
      * The width and the height as two little-endian shorts, the milliseconds the draw took, the number
@@ -35,6 +35,12 @@ final class WrySnapshot {
     private static final int HEADER = 16;
 
     private static long reads = 0;
+
+    private static Bitmap bitmap;
+
+    private static Canvas canvas;
+
+    private static int[] pixels;
 
     private static Handler handler;
 
@@ -88,7 +94,7 @@ final class WrySnapshot {
 
     private static byte[] read(WryPage page) {
         WryView view = page.view;
-        if (view == null) {
+        if (view == null || !page.loaded) {
             return NONE;
         }
         int width = view.getWidth();
@@ -97,12 +103,17 @@ final class WrySnapshot {
             return NONE;
         }
         long begin = SystemClock.uptimeMillis();
-        Bitmap bitmap = null;
         try {
-            bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-            Canvas canvas = new Canvas(bitmap);
+            if (bitmap == null || bitmap.getWidth() != width || bitmap.getHeight() != height) {
+                if (bitmap != null) {
+                    bitmap.recycle();
+                }
+                bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                canvas = new Canvas(bitmap);
+                pixels = new int[width * height];
+            }
+            bitmap.eraseColor(0);
             view.draw(canvas);
-            int[] pixels = new int[width * height];
             bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
             byte[] rgba = new byte[width * height * 4 + HEADER];
             int painted = 0;
@@ -140,10 +151,6 @@ final class WrySnapshot {
             return rgba;
         } catch (Throwable error) {
             return NONE;
-        } finally {
-            if (bitmap != null) {
-                bitmap.recycle();
-            }
         }
     }
 
