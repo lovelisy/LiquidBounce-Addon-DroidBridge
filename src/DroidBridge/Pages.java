@@ -123,7 +123,7 @@ final class Pages {
             keepResponseCookies(connection);
             String html = read(connection.getInputStream());
             String meta = "<meta name=\"viewport\" content=\"width=" + viewport
-                    + ",user-scalable=no\"><style>.menu{zoom:0.4!important}</style>";
+                    + ",user-scalable=no\">";
             Matcher matcher = VIEWPORT.matcher(html);
             String page;
             if (matcher.find()) {
@@ -235,15 +235,13 @@ final class Pages {
                     target.evaluateJavascript(Scripts.DISPATCH_SETUP, null);
                     target.evaluateJavascript(Scripts.MASKS, null);
                     target.evaluateJavascript(Scripts.SCALE, null);
-                    if (page != null && (page.contains("/hud") || page.contains("/clickgui"))) {
-                        target.evaluateJavascript(Scripts.VIEWPORT, new android.webkit.ValueCallback<String>() {
-                            @Override
-                            public void onReceiveValue(String value) {
-                                android.util.Log.i("DroidBridge", "viewport " + value
-                                        + " of " + target.getWidth());
-                            }
-                        });
-                    }
+                    target.evaluateJavascript(Scripts.VIEWPORT, new android.webkit.ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String value) {
+                            android.util.Log.i("DroidBridge", "viewport " + value
+                                    + " of " + target.getWidth());
+                        }
+                    });
                     target.evaluateJavascript(Scripts.FONTS, null);
                     Stack.awaitVisualState(target);
                 }
