@@ -114,6 +114,13 @@ final class WryScripts {
                     + "return raw.indexOf('%')>=0?v/100:v;"
                     + "}"
                     + "function unit(){"
+                    + "var w=window.__wryWidth||0;"
+                    + "var v=window.innerWidth||0;"
+                    + "if(w>0&&v>0){"
+                    + "var u=w/v;"
+                    + "if(isFinite(u)&&u>1){return u;}"
+                    + "if(isFinite(u)&&u>0){return 1;}"
+                    + "}"
                     + "var d=window.devicePixelRatio||1;"
                     + "return d>1.01?d:1;"
                     + "}"
@@ -173,35 +180,27 @@ final class WryScripts {
                     + "if(!el){return {css:'',log:'hud pending'};}"
                     + "var z=ratio(el.style?el.style.zoom:'');"
                     + "if(!z){return {css:'',log:'hud native'};}"
-                    + "var dpr=window.devicePixelRatio||1;"
                     + "var c=cfg('hud',1);"
-                    + "if(dpr<=1.01&&c===1){return {css:'',log:'hud native '+z};}"
+                    + "var u=unit();"
+                    + "if(u<=1.01&&c===1){return {css:'',log:'hud native '+z};}"
                     + "var css='';"
-                    + "if(dpr>1.01){"
-                    + "css+='.hud .draggable-element{zoom:'+(1/dpr).toFixed(6)+'!important;}';"
+                    + "if(u>1.01){"
+                    + "css+='.hud .draggable-element>.contained-element{"
+                    + "zoom:'+(1/u).toFixed(6)+'!important;}';"
                     + "}"
                     + "if(c!==1){"
                     + "css+='.hud{zoom:'+(z*c).toFixed(6)+'!important;}';"
                     + "}"
-                    + "return {css:css,log:'hud dpr'+dpr+' x'+c};"
-                    + "}"
-                    + "function guessBase(w,h){"
-                    + "var z=1;"
-                    + "if(w<=1366){z=0.8;}"
-                    + "if(w<=1200){z=0.5;}"
-                    + "if(h<=1100){z=0.8;}"
-                    + "if(h<=700){z=0.5;}"
-                    + "if(h<=540){z=0.4;}"
-                    + "return z;"
+                    + "return {css:css,log:'hud u'+u+' x'+c};"
                     + "}"
                     + "function menu(){"
-                    + "var u=unit();"
-                    + "var w=(window.innerWidth||0)*u;"
-                    + "var h=(window.innerHeight||0)*u;"
-                    + "var base=guessBase(w,h);"
-                    + "if(u<=1.01){return {css:'',log:'menu native '+base};}"
-                    + "return {css:'.menu{zoom:'+(base/u).toFixed(4)+'!important;}',"
-                    + "log:'menu '+base+'/'+u};"
+                    + "var w=window.innerWidth||0;"
+                    + "var h=window.innerHeight||0;"
+                    + "if(w<=0||h<=0){return {css:'',log:'menu pending'};}"
+                    + "var z=Math.min(1,w/2000,h/1125);"
+                    + "if(!(z>0)){return {css:'',log:'menu pending'};}"
+                    + "return {css:'.menu{zoom:'+z.toFixed(4)+'!important;}',"
+                    + "log:'menu '+w+'x'+h+' '+z.toFixed(4)};"
                     + "}"
                     + "window.__wryScale=function(){"
                     + "var route=location.hash||'';"
@@ -245,6 +244,16 @@ final class WryScripts {
 
     static String config(float clickgui, float hud, float settings) {
         return "window.__wryCfg={clickgui:" + clickgui + ",hud:" + hud + ",settings:" + settings + "}";
+    }
+
+    /**
+     * The width of the web view in device pixels against the width the page lays itself out in is
+     * the ratio the theme misses: its css pixel is one pixel of the framebuffer, the css pixel of
+     * the page is one density independent pixel. It is measured rather than read from the density,
+     * because the page scale the web view applies changes what the page reports as its ratio.
+     */
+    static String width(int pixels) {
+        return "window.__wryWidth=" + (pixels > 0 ? pixels : 0);
     }
 
     /**

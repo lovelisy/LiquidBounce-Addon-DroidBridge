@@ -251,8 +251,58 @@ impl Bridge {
         read(&mut env, report)
     }
 
-    pub fn configure(&self, clickgui: f32, hud: f32, settings: f32) -> api::Result<()> {
+    pub fn set_texture(&self, id: i64, texture: bool) -> api::Result<String> {
         let mut env = self
+            .vm
+            .attach_current_thread_permanently()
+            .map_err(|error| format!("attaching to ART failed: {error}"))?;
+
+        let class = unsafe { JClass::from_raw(self.class.as_raw()) };
+        let report = jni!(
+            env,
+            env.call_static_method(
+                class,
+                "setTexture",
+                "(JZ)Ljava/lang/String;",
+                &[JValue::Long(id), JValue::Bool(texture as u8)],
+            ),
+            "WryBridge.setTexture"
+        )
+        .l()
+        .map_err(|error| format!("WryBridge.setTexture returned nothing: {error}"))?;
+
+        read(&mut env, report)
+    }
+
+    /// The last frame of a page, the header of the Java side first.
+    pub fn snapshot(&self, id: i64) -> api::Result<Vec<u8>> {
+        let mut env = self
+            .vm
+            .attach_current_thread_permanently()
+            .map_err(|error| format!("attaching to ART failed: {error}"))?;
+
+        let class = unsafe { JClass::from_raw(self.class.as_raw()) };
+        let frame = jni!(
+            env,
+            env.call_static_method(class, "snapshot", "(J)[B", &[JValue::Long(id)]),
+            "WryBridge.snapshot"
+        )
+        .l()
+        .map_err(|error| format!("WryBridge.snapshot returned nothing: {error}"))?;
+
+        if frame.is_null() {
+            return Ok(Vec::new());
+        }
+        let frame = jni::objects::JByteArray::from(frame);
+        let length = jni!(env, env.get_array_length(&frame), "reading the frame length") as usize;
+        if length == 0 {
+            return Ok(Vec::new());
+        }
+        let pixels = jni!(env, env.convert_byte_array(&frame), "reading the frame");
+        Ok(pixels)
+    }
+
+    pub fn configure(&self, clickgui: f32, hud: f32, settings: f32) -> api::Result<()> {        let mut env = self
             .vm
             .attach_current_thread_permanently()
             .map_err(|error| format!("attaching to ART failed: {error}"))?;

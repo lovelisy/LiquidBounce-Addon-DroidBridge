@@ -50,6 +50,21 @@ final class WryPage {
 
     boolean sent;
 
+    /**
+     * Whether the page is drawn on a texture of the game instead of being stacked above it.
+     */
+    volatile boolean texture;
+
+    /**
+     * Whether the frames of the page are being read.
+     */
+    volatile boolean ticking;
+
+    /**
+     * The last frame that was read, the header of [WrySnapshot] first.
+     */
+    volatile byte[] frame;
+
     WryPage(long id, WryView view) {
         this(id, view, LAYER_HUD);
     }

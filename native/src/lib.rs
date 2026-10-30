@@ -152,6 +152,36 @@ browser_call!(Java_liquidbounce_DroidBridge_WryNative_text(text: JString) => |en
 });
 browser_call!(Java_liquidbounce_DroidBridge_WryNative_enter() => |engine, env, id| engine.enter(id));
 
+/// Switches a page between being stacked above the game and being drawn on a texture of the game.
+#[no_mangle]
+pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_setTexture(mut env: JNIEnv, _: JClass,
+    id: jlong, texture: jboolean) {
+    with_engine(&mut env, |engine, _| {
+        engine.set_texture(id as api::BrowserId, texture != 0);
+        Ok(())
+    })
+}
+
+/// The last frame of a page that is drawn on a texture, or null when there is none.
+#[no_mangle]
+pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_snapshot(mut env: JNIEnv, _: JClass,
+    id: jlong) -> jni::sys::jbyteArray {
+    guard(&mut env, |env| {
+        let frame = {
+            let mut shared = engine();
+            let engine = shared.0.as_mut().ok_or("DroidBridge is not started")?;
+            engine.snapshot(id as api::BrowserId)
+        };
+        if frame.is_empty() {
+            return Ok(std::ptr::null_mut());
+        }
+        let err = |e: jni::errors::Error| e.to_string();
+        let array = env.new_byte_array(frame.len() as jint).map_err(err)?;
+        env.set_byte_array_region(&array, 0, &frame).map_err(err)?;
+        Ok(array.into_raw())
+    })
+}
+
 /// Events since the last call as `WryEvent`s, or null when there are none.
 #[no_mangle]
 pub extern "system" fn Java_liquidbounce_DroidBridge_WryNative_pollEvents(mut env: JNIEnv, _: JClass) -> jobjectArray {

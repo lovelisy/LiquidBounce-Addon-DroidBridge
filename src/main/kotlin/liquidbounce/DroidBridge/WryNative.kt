@@ -139,6 +139,12 @@ internal object WryNative {
     @JvmStatic
     external fun pollEvents(): Array<WryEvent>?
 
+    @JvmStatic
+    external fun setTexture(id: Long, texture: Boolean)
+
+    @JvmStatic
+    external fun snapshot(id: Long): ByteArray?
+
 }
 
 /**

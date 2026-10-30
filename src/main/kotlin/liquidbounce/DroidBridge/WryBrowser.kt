@@ -12,6 +12,8 @@ import net.ccbluex.liquidbounce.integration.backend.input.InputHandler
 import net.ccbluex.liquidbounce.integration.backend.input.InputListener
 import net.ccbluex.liquidbounce.integration.screen.ScreenManager
 import net.ccbluex.liquidbounce.utils.client.mc
+import net.minecraft.client.gui.screens.ChatScreen
+import net.minecraft.client.gui.screens.Screen
 import org.apache.logging.log4j.LogManager
 import org.joml.component1
 import org.joml.component2
@@ -42,6 +44,7 @@ class WryBrowser internal constructor(
     private var size = viewport.getScaledDimensions(GlobalBrowserSettings.quality)
     private var isClosed = false
     private var shownScreen = false
+    private var textureOn = false
 
     init {
         require(url.isNotEmpty()) { "URL cannot be empty." }
@@ -101,10 +104,17 @@ class WryBrowser internal constructor(
         }
 
     /**
-     * The web view of the system is drawn by the system on top of the game, so the game has no texture of it.
+     * The web view of the system is drawn by the system on top of the game, so the game has no texture
+     * of it, unless the page is switched to a texture of its own, in which case the frames that are
+     * read from it are published here and drawn by the game below its screens.
      */
+    private val ownTexture = WryTexture(id)
+
     override val texture: BrowserTexture?
-        get() = null
+        get() = if (textureMode) ownTexture.browserTexture else null
+
+    private val textureMode: Boolean
+        get() = isHudPage()
 
     override fun forceReload() = onRenderThread { WryNative.reload(id, true) }
 
@@ -118,6 +128,7 @@ class WryBrowser internal constructor(
         renderer.close()
         inputListener?.close()
         backend.removeBrowser(this)
+        ownTexture.close()
 
         onRenderThread {
             if (isClosed) {
@@ -166,9 +177,12 @@ class WryBrowser internal constructor(
         val show = if (priority > 0 || inputListener != null) {
             clientScreen && (visible || ScreenManager.mainBrowser === this)
         } else if (isHudPage()) {
-            visible && screen == null
+            visible && (screen == null || keepsHud(screen))
         } else {
             visible && (clientScreen || mc.player != null)
+        }
+        if (textureMode) {
+            return
         }
         if (show == shownScreen) {
             return
@@ -181,9 +195,32 @@ class WryBrowser internal constructor(
         currentUrl.contains("/hud") && !currentUrl.contains("/inventory")
 
     /**
+     * The game keeps its hud while the chat is open, because the chat only covers the bottom of the
+     * screen and the hud stays visible above it. Every other native screen covers the whole view, so
+     * a web view, which cannot be covered, has to step aside for those instead.
+     */
+    private fun keepsHud(screen: Screen?): Boolean = screen is ChatScreen
+
+    /**
+     * Reads the latest frame of the page into the texture the game draws, while the page is a texture.
+     */
+    internal fun pollTexture() {
+        if (textureMode) {
+            ownTexture.poll()
+        }
+    }
+
+    /**
      * Pushes what the game tells the web view this frame.
      */
     internal fun updateFrame() {
+        if (textureMode && !textureOn) {
+            WryNative.setTexture(id, true)
+            textureOn = true
+        } else if (!textureMode && textureOn) {
+            WryNative.setTexture(id, false)
+            textureOn = false
+        }
         pushVisible()
     }
 

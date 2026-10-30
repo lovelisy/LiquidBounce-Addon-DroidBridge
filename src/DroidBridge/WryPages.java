@@ -231,6 +231,7 @@ final class WryPages {
                     }
                     target.evaluateJavascript(
                             WryScripts.config(clickguiScale, hudScale, settingsScale), null);
+                    target.evaluateJavascript(WryScripts.width(target.getWidth()), null);
                     target.evaluateJavascript(WryScripts.DISPATCH_SETUP, null);
                     target.evaluateJavascript(WryScripts.MASKS, null);
                     target.evaluateJavascript(WryScripts.SCALE, null);
@@ -266,10 +267,24 @@ final class WryPages {
                     + ", parent " + (parent == null ? "none" : parent.getClass().getName())
                     + ", order " + (parent == null ? -1 : parent.indexOfChild(view)) + " of " + (parent == null ? -1 : parent.getChildCount())
                     + ", stacking " + stacking
+                    + ", " + metrics(activity, viewport)
                     + ", url " + url;
         } catch (Throwable error) {
             WryStack.put(new WryPage(id, null));
             return "browser " + id + " failed: " + error;
+        }
+    }
+
+    /**
+     * The width the theme is written in against the width the page lays itself out in. Printed with
+     * every browser so the log says whether a page had to be compensated and by how much.
+     */
+    private static String metrics(Activity activity, int viewport) {
+        try {
+            float density = activity.getResources().getDisplayMetrics().density;
+            return "framebuffer " + viewport + " density " + density;
+        } catch (Throwable error) {
+            return "framebuffer " + viewport + " density unknown";
         }
     }
 
@@ -348,6 +363,17 @@ final class WryPages {
             remove(id);
         }
     }
+
+    /**
+     * Records how long the last frame of a page took to draw, for the log to tell whether the game is
+     * keeping up with the page.
+     */
+    static void metric(int width, int height, int millis, int painted) {
+        lastMetric = "page " + width + "x" + height + " drew in " + millis + " ms, " + painted
+                + " pixels painted";
+    }
+
+    private static volatile String lastMetric = "";
 
     static String await(CountDownLatch latch, String[] outcome) {
         try {
