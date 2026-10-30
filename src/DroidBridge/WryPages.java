@@ -235,6 +235,13 @@ final class WryPages {
                     target.evaluateJavascript(WryScripts.DISPATCH_SETUP, null);
                     target.evaluateJavascript(WryScripts.MASKS, null);
                     target.evaluateJavascript(WryScripts.SCALE, null);
+                    target.evaluateJavascript(WryScripts.VIEWPORT, new android.webkit.ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String value) {
+                            android.util.Log.i("Wry", "viewport " + value
+                                    + " of " + target.getWidth());
+                        }
+                    });
                     target.evaluateJavascript(WryScripts.FONTS, null);
                     WryStack.awaitVisualState(target);
                 }
