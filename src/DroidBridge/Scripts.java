@@ -214,7 +214,7 @@ final class Scripts {
                     + "var w=(window.innerWidth||0)*u;"
                     + "var h=(window.innerHeight||0)*u;"
                     + "var base=guessBase(w,h);"
-                    + "if(u<=1.01){return {css:'',log:'menu native '+base};}"
+                    + "if(window.__wryWidth>0&&u<=1.01){base=Math.min(base,0.5);}"
                     + "return {css:'.menu{zoom:'+(base/u).toFixed(4)+'!important;}',"
                     + "log:'menu '+base+'/'+u};"
                     + "}"
