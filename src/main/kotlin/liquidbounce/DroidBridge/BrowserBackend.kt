@@ -2,7 +2,7 @@ package liquidbounce.DroidBridge
 
 import net.ccbluex.liquidbounce.config.ConfigSystem
 import net.ccbluex.liquidbounce.event.EventListener
-import net.ccbluex.liquidbounce.integration.backend.BrowserBackend
+import net.ccbluex.liquidbounce.integration.backend.BrowserBackend as LbBrowserBackend
 import net.ccbluex.liquidbounce.integration.backend.browser.BrowserSettings
 import net.ccbluex.liquidbounce.integration.backend.browser.BrowserViewport
 import net.ccbluex.liquidbounce.integration.backend.input.InputAcceptor
@@ -14,19 +14,19 @@ import org.apache.logging.log4j.LogManager
 /**
  * Shows the client's pages in the web view of Android, drawn on top of the game by the system.
  */
-class WryBrowserBackend : BrowserBackend, EventListener {
+class BrowserBackend : LbBrowserBackend, EventListener {
 
     private val folder = ConfigSystem.rootFolder.resolve("droidbridge")
     private val logger = LogManager.getLogger("LiquidBounce/DroidBridge")
 
     override var isInitialized = false
         private set
-    override val browsers = mutableListOf<WryBrowser>()
+    override val browsers = mutableListOf<Browser>()
     override val supportsIncognito = true
 
     override fun makeDependenciesAvailable(taskManager: TaskManager, whenAvailable: () -> Unit) {
         runCatching {
-            WryNative.load(folder.resolve("natives"))
+            Native.load(folder.resolve("natives"))
         }.onFailure {
             ErrorHandler.fatal(error = it, additionalMessage = "Loading DroidBridge")
         }
@@ -39,7 +39,7 @@ class WryBrowserBackend : BrowserBackend, EventListener {
         }
 
         runCatching {
-            WryNative.start(folder.resolve("data").absolutePath, false, null, LongArray(0))
+            Native.start(folder.resolve("data").absolutePath, false, null, LongArray(0))
         }.onFailure {
             // The client's startup task would drop it silently
             ErrorHandler.fatal(error = it, additionalMessage = "Starting DroidBridge")
@@ -51,9 +51,9 @@ class WryBrowserBackend : BrowserBackend, EventListener {
     }
 
     override fun stop() {
-        browsers.toList().forEach(WryBrowser::close)
+        browsers.toList().forEach(Browser::close)
         if (isInitialized) {
-            WryNative.stop()
+            Native.stop()
             isInitialized = false
         }
     }
@@ -64,7 +64,7 @@ class WryBrowserBackend : BrowserBackend, EventListener {
         }
 
         try {
-            WryNative.update()
+            Native.update()
             pollEvents()
             for (browser in browsers) {
                 browser.updateFrame()
@@ -76,10 +76,10 @@ class WryBrowserBackend : BrowserBackend, EventListener {
     }
 
     private fun pollEvents() {
-        val events = WryNative.pollEvents() ?: return
+        val events = Native.pollEvents() ?: return
         for (event in events) {
             when (event.kind) {
-                WryNative.EVENT_LOG -> when (event.code) {
+                Native.EVENT_LOG -> when (event.code) {
                     0 -> logger.debug(event.text)
                     1 -> logger.info(event.text)
                     2 -> logger.warn(event.text)
@@ -97,10 +97,10 @@ class WryBrowserBackend : BrowserBackend, EventListener {
         priority: Short,
         incognito: Boolean,
         inputAcceptor: InputAcceptor?
-    ) = WryBrowser(this, url, position, settings, priority, incognito, inputAcceptor)
-        .apply { browsers.sortedInsert(this, WryBrowser::priority) }
+    ) = Browser(this, url, position, settings, priority, incognito, inputAcceptor)
+        .apply { browsers.sortedInsert(this, Browser::priority) }
 
-    internal fun removeBrowser(browser: WryBrowser) {
+    internal fun removeBrowser(browser: Browser) {
         browsers.remove(browser)
     }
 

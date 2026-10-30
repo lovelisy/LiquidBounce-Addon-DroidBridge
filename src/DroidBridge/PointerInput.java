@@ -15,7 +15,7 @@ import java.util.Map;
  * that the system has never given an input connection drops them, so enter, backspace and typed
  * text are mirrored inside the page instead.
  */
-final class WryInput {
+final class PointerInput {
 
     /**
      * One wheel step in pixels of a page, the rough distance a mouse wheel covers in a browser.
@@ -50,8 +50,8 @@ final class WryInput {
 
     private static final int KEY_ASCII_DELETE = 127;
 
-    static void pointer(WryPage page, float x, float y, int action, int button, float amount) {
-        WryView view = page.view;
+    static void pointer(Page page, float x, float y, int action, int button, float amount) {
+        BridgeView view = page.view;
         if (view == null) {
             return;
         }
@@ -82,7 +82,7 @@ final class WryInput {
         mouse(view, MotionEvent.ACTION_HOVER_MOVE, x, y);
     }
 
-    static void key(WryPage page, int keycode, boolean pressed) {
+    static void key(Page page, int keycode, boolean pressed) {
         if (page.view == null || page.view.getVisibility() != android.view.View.VISIBLE) {
             return;
         }
@@ -97,7 +97,7 @@ final class WryInput {
         edit(page, code == EDIT_BACK);
     }
 
-    static void text(WryPage page, String value) {
+    static void text(Page page, String value) {
         if (value == null || value.isEmpty()) {
             return;
         }
@@ -110,15 +110,15 @@ final class WryInput {
         }
         String quoted = "'" + value.replace("\\", "\\\\").replace("'", "\\'")
                 .replace("\n", "\\n").replace("\r", "\\r") + "'";
-        page.view.evaluateJavascript("(function(text){" + WryScripts.INSERT + "})(" + quoted + ")", null);
+        page.view.evaluateJavascript("(function(text){" + Scripts.INSERT + "})(" + quoted + ")", null);
     }
 
-    static void enter(WryPage page) {
-        page.view.evaluateJavascript("(function(){" + WryScripts.ENTER + "})()", null);
+    static void enter(Page page) {
+        page.view.evaluateJavascript("(function(){" + Scripts.ENTER + "})()", null);
     }
 
-    static void edit(final WryPage page, final boolean backspace) {
-        page.view.evaluateJavascript("(function(){" + WryScripts.edit(backspace) + "})()", null);
+    static void edit(final Page page, final boolean backspace) {
+        page.view.evaluateJavascript("(function(){" + Scripts.edit(backspace) + "})()", null);
     }
 
     private static int keycode(int code) {
@@ -142,13 +142,13 @@ final class WryInput {
      * The axis of a scroll event does not carry the steps the game reports, so the wheel is raised in
      * the page instead, where the delta is what the page expects.
      */
-    private static void wheel(final WryPage page, WryView view, float x, float y, float amount) {
+    private static void wheel(final Page page, BridgeView view, float x, float y, float amount) {
         final float delta = -amount * WHEEL_STEP;
         if (delta == 0f) {
             return;
         }
         page.remember(x, y);
-        view.evaluateJavascript("(function(){" + WryScripts.wheel(x, y, delta) + "})()", null);
+        view.evaluateJavascript("(function(){" + Scripts.wheel(x, y, delta) + "})()", null);
     }
 
     /**
@@ -178,13 +178,13 @@ final class WryInput {
         }
     }
 
-    private static final Map<WryView, Hover> HOVERS = new HashMap<>();
+    private static final Map<BridgeView, Hover> HOVERS = new HashMap<>();
 
-    static void forget(WryView view) {
+    static void forget(BridgeView view) {
         HOVERS.remove(view);
     }
 
-    private static boolean mouse(WryView view, int type, float x, float y) {
+    private static boolean mouse(BridgeView view, int type, float x, float y) {
         Hover hover = HOVERS.get(view);
         if (hover == null) {
             hover = new Hover();
@@ -222,7 +222,7 @@ final class WryInput {
      * one. The page is driven directly instead, where the coordinates are taken as fractions of the
      * viewport and the target is resolved by hit testing.
      */
-    private static void dom(WryPage page, WryView view, final float x, final float y,
+    private static void dom(Page page, BridgeView view, final float x, final float y,
                             final String phase, int button) {
         if (!view.isFocused()) {
             view.requestFocus();
@@ -264,6 +264,6 @@ final class WryInput {
         view.evaluateJavascript(script.toString(), null);
     }
 
-    private WryInput() {
+    private PointerInput() {
     }
 }

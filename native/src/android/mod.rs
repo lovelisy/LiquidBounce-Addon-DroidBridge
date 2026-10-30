@@ -21,7 +21,7 @@ impl Engine {
         let vm = art::find()?;
         let bridge = bridge::Bridge::attach(vm, &options.data_dir)?;
         let report = bridge.start()?;
-        api::info(format!("[Wry] {report}"));
+        api::info(format!("[DroidBridge] {report}"));
         Ok(Self { bridge: Some(bridge), next: 1, pages: HashMap::new() })
     }
 
@@ -29,7 +29,7 @@ impl Engine {
         self.pages.clear();
         if let Some(bridge) = self.bridge.take() {
             if let Err(error) = bridge.close_all() {
-                api::warn(format!("[Wry] closing the web views failed: {error}"));
+                api::warn(format!("[DroidBridge] closing the web views failed: {error}"));
             }
         }
     }
@@ -50,7 +50,7 @@ impl Engine {
                 Ok(false) => {}
                 Err(error) => {
                     page.announced = true;
-                    api::warn(format!("[Wry] checking the page state failed: {error}"));
+                    api::warn(format!("[DroidBridge] checking the page state failed: {error}"));
                 }
             }
         }
@@ -64,11 +64,11 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| "the Android bridge is not running".to_string())?;
         api::info(format!(
-            "[Wry] browser {id} asked for {} ({}x{})",
+            "[DroidBridge] browser {id} asked for {} ({}x{})",
             options.url, options.width, options.height
         ));
         let report = bridge.create(id as i64, &options.url)?;
-        api::info(format!("[Wry] {report}"));
+        api::info(format!("[DroidBridge] {report}"));
         self.pages.insert(
             id,
             Page { viewport: (options.width.max(1), options.height.max(1)), url: options.url, announced: false },
@@ -80,7 +80,7 @@ impl Engine {
         self.pages.remove(&id);
         if let Some(bridge) = self.bridge.as_ref() {
             if let Err(error) = bridge.close(id as i64) {
-                api::warn(format!("[Wry] closing the web view failed: {error}"));
+                api::warn(format!("[DroidBridge] closing the web view failed: {error}"));
             }
         }
     }
@@ -90,7 +90,7 @@ impl Engine {
             return;
         };
         if let Err(error) = bridge.set_visible(id as i64, visible) {
-            api::warn(format!("[Wry] setting the web view visibility failed: {error}"));
+            api::warn(format!("[DroidBridge] setting the web view visibility failed: {error}"));
         }
     }
 
@@ -99,7 +99,7 @@ impl Engine {
             return;
         };
         if let Err(error) = bridge.set_texture(id as i64, texture) {
-            api::warn(format!("[Wry] switching the web view to a texture failed: {error}"));
+            api::warn(format!("[DroidBridge] switching the web view to a texture failed: {error}"));
         }
     }
 
@@ -111,7 +111,7 @@ impl Engine {
         match bridge.snapshot(id as i64, last_version) {
             Ok(frame) => frame,
             Err(error) => {
-                api::warn(format!("[Wry] reading a frame of the web view failed: {error}"));
+                api::warn(format!("[DroidBridge] reading a frame of the web view failed: {error}"));
                 Vec::new()
             }
         }
@@ -122,7 +122,7 @@ impl Engine {
             return;
         };
         if let Err(error) = bridge.configure(clickgui, hud, settings) {
-            api::warn(format!("[Wry] configuring the page scale failed: {error}"));
+            api::warn(format!("[DroidBridge] configuring the page scale failed: {error}"));
         }
     }
 
@@ -163,7 +163,7 @@ impl Engine {
             Pointer::Scroll(steps) => (3, 0, steps),
         };
         if let Err(error) = bridge.pointer(id as i64, nx, ny, action, button, amount) {
-            api::warn(format!("[Wry] forwarding a pointer event failed: {error}"));
+            api::warn(format!("[DroidBridge] forwarding a pointer event failed: {error}"));
         }
     }
 
@@ -172,7 +172,7 @@ impl Engine {
             return;
         };
         if let Err(error) = bridge.key(id as i64, key.pressed, key.keycode) {
-            api::warn(format!("[Wry] forwarding a key event failed: {error}"));
+            api::warn(format!("[DroidBridge] forwarding a key event failed: {error}"));
         }
     }
 
@@ -181,7 +181,7 @@ impl Engine {
             return;
         };
         if let Err(error) = bridge.text(id as i64, &text) {
-            api::warn(format!("[Wry] forwarding typed text failed: {error}"));
+            api::warn(format!("[DroidBridge] forwarding typed text failed: {error}"));
         }
     }
 
@@ -190,7 +190,7 @@ impl Engine {
             return;
         };
         if let Err(error) = bridge.enter(id as i64) {
-            api::warn(format!("[Wry] forwarding enter failed: {error}"));
+            api::warn(format!("[DroidBridge] forwarding enter failed: {error}"));
         }
     }
 }

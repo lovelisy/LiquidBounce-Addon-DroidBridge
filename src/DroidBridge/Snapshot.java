@@ -14,9 +14,9 @@ import android.os.SystemClock;
  * view is still visible to the system, so it keeps painting, and the frames are read here on the
  * main thread and kept for the game to pick up.
  *
- * @see WryPage#texture
+ * @see Page#texture
  */
-final class WrySnapshot {
+final class Snapshot {
 
     /**
      * How often a page is read while it keeps changing, in milliseconds. Drawing a page is a
@@ -54,7 +54,7 @@ final class WrySnapshot {
 
     private static Handler handler;
 
-    private WrySnapshot() {
+    private Snapshot() {
     }
 
     static void start() {
@@ -66,7 +66,7 @@ final class WrySnapshot {
     /**
      * Starts reading the page of [page] while [page] stays a texture page.
      */
-    static void begin(final WryPage page) {
+    static void begin(final Page page) {
         if (page == null || !page.texture || page.ticking) {
             return;
         }
@@ -87,7 +87,7 @@ final class WrySnapshot {
         });
     }
 
-    static void end(WryPage page) {
+    static void end(Page page) {
         if (page == null) {
             return;
         }
@@ -95,8 +95,8 @@ final class WrySnapshot {
         page.frame = NONE;
     }
 
-    private static byte[] read(WryPage page) {
-        WryView view = page.view;
+    private static byte[] read(Page page) {
+        BridgeView view = page.view;
         if (view == null || !page.loaded) {
             return null;
         }
@@ -161,7 +161,7 @@ final class WrySnapshot {
             rgba[13] = (byte) ((counter >> 8) & 0xff);
             rgba[14] = (byte) ((counter >> 16) & 0xff);
             rgba[15] = (byte) ((counter >> 24) & 0xff);
-            WryPages.metric(width, height, took, painted);
+            Pages.metric(width, height, took, painted);
             return rgba;
         } catch (Throwable error) {
             return null;

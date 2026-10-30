@@ -4,7 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants
 import com.mojang.blaze3d.platform.cursor.CursorType
 import com.mojang.blaze3d.platform.cursor.CursorTypes
 
-internal object WryInput {
+internal object Input {
 
     fun mouseButton(button: Int) = when (button) {
         InputConstants.MOUSE_BUTTON_LEFT -> 0

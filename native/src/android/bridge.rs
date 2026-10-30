@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 
 const DEX: &[u8] = include_bytes!("../../android-bridge.dex");
-const CLASS: &str = "liquidbounce.DroidBridge.WryBridge";
+const CLASS: &str = "liquidbounce.DroidBridge.Bridge";
 const FOLDER: &str = "liquidbounce-droidbridge";
 
 macro_rules! jni {
@@ -155,10 +155,10 @@ impl Bridge {
                     JValue::Object(&JObject::from(suffix)),
                 ],
             ),
-            "WryBridge.start"
+            "Bridge.start"
         )
         .l()
-        .map_err(|error| format!("WryBridge.start returned nothing: {error}"))?;
+        .map_err(|error| format!("Bridge.start returned nothing: {error}"))?;
 
         read(&mut env, started)
     }
@@ -184,10 +184,10 @@ impl Bridge {
                     JValue::Object(&JObject::from(url)),
                 ],
             ),
-            "WryBridge.create"
+            "Bridge.create"
         )
         .l()
-        .map_err(|error| format!("WryBridge.create returned nothing: {error}"))?;
+        .map_err(|error| format!("Bridge.create returned nothing: {error}"))?;
 
         read(&mut env, created)
     }
@@ -202,10 +202,10 @@ impl Bridge {
         let closed = jni!(
             env,
             env.call_static_method(class, "close", "(J)Ljava/lang/String;", &[JValue::Long(id)]),
-            "WryBridge.close"
+            "Bridge.close"
         )
         .l()
-        .map_err(|error| format!("WryBridge.close returned nothing: {error}"))?;
+        .map_err(|error| format!("Bridge.close returned nothing: {error}"))?;
 
         read(&mut env, closed)
     }
@@ -220,10 +220,10 @@ impl Bridge {
         let closed = jni!(
             env,
             env.call_static_method(class, "closeAll", "()Ljava/lang/String;", &[]),
-            "WryBridge.closeAll"
+            "Bridge.closeAll"
         )
         .l()
-        .map_err(|error| format!("WryBridge.closeAll returned nothing: {error}"))?;
+        .map_err(|error| format!("Bridge.closeAll returned nothing: {error}"))?;
 
         read(&mut env, closed)
     }
@@ -243,10 +243,10 @@ impl Bridge {
                 "(JZ)Ljava/lang/String;",
                 &[JValue::Long(id), JValue::Bool(visible as u8)],
             ),
-            "WryBridge.setVisible"
+            "Bridge.setVisible"
         )
         .l()
-        .map_err(|error| format!("WryBridge.setVisible returned nothing: {error}"))?;
+        .map_err(|error| format!("Bridge.setVisible returned nothing: {error}"))?;
 
         read(&mut env, report)
     }
@@ -266,10 +266,10 @@ impl Bridge {
                 "(JZ)Ljava/lang/String;",
                 &[JValue::Long(id), JValue::Bool(texture as u8)],
             ),
-            "WryBridge.setTexture"
+            "Bridge.setTexture"
         )
         .l()
-        .map_err(|error| format!("WryBridge.setTexture returned nothing: {error}"))?;
+        .map_err(|error| format!("Bridge.setTexture returned nothing: {error}"))?;
 
         read(&mut env, report)
     }
@@ -290,10 +290,10 @@ impl Bridge {
                 "(JI)[B",
                 &[JValue::Long(id), JValue::Int(last_version)],
             ),
-            "WryBridge.snapshot"
+            "Bridge.snapshot"
         )
         .l()
-        .map_err(|error| format!("WryBridge.snapshot returned nothing: {error}"))?;
+        .map_err(|error| format!("Bridge.snapshot returned nothing: {error}"))?;
 
         if frame.is_null() {
             return Ok(Vec::new());
@@ -325,7 +325,7 @@ impl Bridge {
                     JValue::Float(settings),
                 ],
             ),
-            "WryBridge.configure"
+            "Bridge.configure"
         );
 
         Ok(())
@@ -354,7 +354,7 @@ impl Bridge {
                     JValue::Float(amount as f32),
                 ],
             ),
-            "WryBridge.pointer"
+            "Bridge.pointer"
         );
 
         Ok(())
@@ -375,7 +375,7 @@ impl Bridge {
                 "(JIZ)V",
                 &[JValue::Long(id), JValue::Int(keycode), JValue::Bool(pressed as u8)],
             ),
-            "WryBridge.key"
+            "Bridge.key"
         );
 
         Ok(())
@@ -398,7 +398,7 @@ impl Bridge {
                 "(JLjava/lang/String;)V",
                 &[JValue::Long(id), JValue::Object(&text)],
             ),
-            "WryBridge.text"
+            "Bridge.text"
         );
 
         Ok(())
@@ -414,7 +414,7 @@ impl Bridge {
         jni!(
             env,
             env.call_static_method(class, "enter", "(J)V", &[JValue::Long(id)]),
-            "WryBridge.enter"
+            "Bridge.enter"
         );
 
         Ok(())
@@ -430,10 +430,10 @@ impl Bridge {
         let value = jni!(
             env,
             env.call_static_method(class, "loaded", "(J)Z", &[JValue::Long(id)]),
-            "WryBridge.loaded"
+            "Bridge.loaded"
         )
         .z()
-        .map_err(|error| format!("WryBridge.loaded returned nothing: {error}"))?;
+        .map_err(|error| format!("Bridge.loaded returned nothing: {error}"))?;
 
         Ok(value)
     }

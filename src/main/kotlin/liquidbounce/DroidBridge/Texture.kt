@@ -19,11 +19,11 @@ import java.util.function.Supplier
  * The last frame of a page that the system draws below the game, kept on a texture of the game.
  *
  * The page is [HEADER] bytes of measurements followed by one RGBA texel per pixel, which is what
- * [WryNative.snapshot] answers. The texture is handed to the renderer of the game, so the game draws
+ * [Native.snapshot] answers. The texture is handed to the renderer of the game, so the game draws
  * it in the hud pass and every screen drawn afterwards covers it, exactly like its own hud. [upload]
  * follows the same staging path the client uses for [net.ccbluex.liquidbounce.utils.render.write].
  */
-internal class WryTexture(private val id: Long) {
+internal class Texture(private val id: Long) {
 
     private var texture: GpuTexture? = null
 
@@ -52,7 +52,7 @@ internal class WryTexture(private val id: Long) {
         private set
 
     fun poll() {
-        val frame = WryNative.snapshot(id, stamp) ?: return
+        val frame = Native.snapshot(id, stamp) ?: return
         if (frame.size <= HEADER) {
             return
         }

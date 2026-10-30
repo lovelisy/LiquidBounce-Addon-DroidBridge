@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
 /**
  * The pages themselves: creating one, showing it and taking it down again.
  */
-final class WryPages {
+final class Pages {
 
     private static Handler main;
 
@@ -53,9 +53,9 @@ final class WryPages {
         main.post(new Runnable() {
             @Override
             public void run() {
-                String script = WryScripts.config(clickguiScale, hudScale, settingsScale)
+                String script = Scripts.config(clickguiScale, hudScale, settingsScale)
                         + ";window.__wryScale&&window.__wryScale()";
-                for (WryPage page : WryStack.pages().values()) {
+                for (Page page : Stack.pages().values()) {
                     if (page.view != null) {
                         page.view.evaluateJavascript(script, null);
                     }
@@ -204,7 +204,7 @@ final class WryPages {
         try {
             remove(id);
             long begin = System.nanoTime();
-            WryView view = new WryView(activity);
+            BridgeView view = new BridgeView(activity);
             view.setBackgroundColor(0x00000000);
             view.getSettings().setJavaScriptEnabled(true);
             view.getSettings().setDomStorageEnabled(true);
@@ -224,42 +224,42 @@ final class WryPages {
 
                 @Override
                 public void onPageFinished(WebView target, String page) {
-                    WryPage entry = WryStack.page(id);
+                    Page entry = Stack.page(id);
                     if (entry != null) {
                         entry.loaded = true;
                         entry.sent = false;
                     }
                     target.evaluateJavascript(
-                            WryScripts.config(clickguiScale, hudScale, settingsScale), null);
-                    target.evaluateJavascript(WryScripts.width(target.getWidth()), null);
-                    target.evaluateJavascript(WryScripts.DISPATCH_SETUP, null);
-                    target.evaluateJavascript(WryScripts.MASKS, null);
-                    target.evaluateJavascript(WryScripts.SCALE, null);
-                    target.evaluateJavascript(WryScripts.VIEWPORT, new android.webkit.ValueCallback<String>() {
+                            Scripts.config(clickguiScale, hudScale, settingsScale), null);
+                    target.evaluateJavascript(Scripts.width(target.getWidth()), null);
+                    target.evaluateJavascript(Scripts.DISPATCH_SETUP, null);
+                    target.evaluateJavascript(Scripts.MASKS, null);
+                    target.evaluateJavascript(Scripts.SCALE, null);
+                    target.evaluateJavascript(Scripts.VIEWPORT, new android.webkit.ValueCallback<String>() {
                         @Override
                         public void onReceiveValue(String value) {
-                            android.util.Log.i("Wry", "viewport " + value
+                            android.util.Log.i("DroidBridge", "viewport " + value
                                     + " of " + target.getWidth());
                         }
                     });
-                    target.evaluateJavascript(WryScripts.FONTS, null);
-                    WryStack.awaitVisualState(target);
+                    target.evaluateJavascript(Scripts.FONTS, null);
+                    Stack.awaitVisualState(target);
                 }
 
                 @Override
                 public void onPageCommitVisible(WebView target, String page) {
-                    WryStack.awaitVisualState(target);
+                    Stack.awaitVisualState(target);
                 }
             });
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT);
             activity.addContentView(view, params);
-            int layer = WryPage.layerOfUrl(url);
-            WryStack.tag(view, id, layer);
-            WryPage created = new WryPage(id, view, layer);
-            WryStack.put(created);
-            String stacking = WryStack.place(view);
+            int layer = Page.layerOfUrl(url);
+            Stack.tag(view, id, layer);
+            Page created = new Page(id, view, layer);
+            Stack.put(created);
+            String stacking = Stack.place(view);
             view.setVisibility(View.INVISIBLE);
             view.setFocusable(true);
             view.setFocusableInTouchMode(true);
@@ -277,7 +277,7 @@ final class WryPages {
                     + ", " + metrics(activity, viewport)
                     + ", url " + url;
         } catch (Throwable error) {
-            WryStack.put(new WryPage(id, null));
+            Stack.put(new Page(id, null));
             return "browser " + id + " failed: " + error;
         }
     }
@@ -353,7 +353,7 @@ final class WryPages {
     }
 
     static void remove(long id) {
-        WryPage page = WryStack.take(id);
+        Page page = Stack.take(id);
         if (page == null || page.view == null) {
             return;
         }
@@ -361,12 +361,12 @@ final class WryPages {
         if (parent != null) {
             parent.removeView(page.view);
         }
-        WryInput.forget(page.view);
+        PointerInput.forget(page.view);
         page.view.destroy();
     }
 
     static void removeAll() {
-        for (Long id : new ArrayList<>(WryStack.pages().keySet())) {
+        for (Long id : new ArrayList<>(Stack.pages().keySet())) {
             remove(id);
         }
     }
@@ -394,6 +394,6 @@ final class WryPages {
         return outcome[0];
     }
 
-    private WryPages() {
+    private Pages() {
     }
 }

@@ -14,27 +14,27 @@ import java.util.concurrent.ConcurrentHashMap;
  * the one that was shown last used to end up at the bottom. A screen sits above the hud, so the
  * order is kept here rather than in the order the pages happen to be shown in.
  */
-final class WryStack {
+final class Stack {
 
     private static final int TAG_ID = 0x7f0d0001;
 
     private static final int TAG_LAYER = 0x7f0d0002;
 
-    private static final Map<Long, WryPage> PAGES = new ConcurrentHashMap<>();
+    private static final Map<Long, Page> PAGES = new ConcurrentHashMap<>();
 
-    static Map<Long, WryPage> pages() {
+    static Map<Long, Page> pages() {
         return PAGES;
     }
 
-    static WryPage page(long id) {
+    static Page page(long id) {
         return PAGES.get(id);
     }
 
-    static void put(WryPage page) {
+    static void put(Page page) {
         PAGES.put(page.id, page);
     }
 
-    static WryPage take(long id) {
+    static Page take(long id) {
         return PAGES.remove(id);
     }
 
@@ -45,7 +45,7 @@ final class WryStack {
 
     static int layerOf(View view) {
         Object tag = view.getTag(TAG_LAYER);
-        return tag instanceof Integer ? ((Integer) tag).intValue() : WryPage.LAYER_HUD;
+        return tag instanceof Integer ? ((Integer) tag).intValue() : Page.LAYER_HUD;
     }
 
     /**
@@ -123,7 +123,7 @@ final class WryStack {
             if (child == view) {
                 continue;
             }
-            if (!(child instanceof WryView)) {
+            if (!(child instanceof BridgeView)) {
                 continue;
             }
             if (layerOf(child) > layer) {
@@ -249,7 +249,7 @@ final class WryStack {
         if (!(tag instanceof Long)) {
             return;
         }
-        WryPage entry = PAGES.get((Long) tag);
+        Page entry = PAGES.get((Long) tag);
         if (entry == null || entry.drawn) {
             return;
         }
@@ -261,7 +261,7 @@ final class WryStack {
      * Shows the page only once it has painted, so the frame that appears is a page and not a blank
      * view.
      */
-    static void show(WryPage page) {
+    static void show(Page page) {
         if (!page.wanted || page.view == null || page.view.getVisibility() == View.VISIBLE) {
             return;
         }
@@ -269,6 +269,6 @@ final class WryStack {
         place(page.view);
     }
 
-    private WryStack() {
+    private Stack() {
     }
 }

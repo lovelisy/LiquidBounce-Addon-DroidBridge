@@ -8,11 +8,11 @@ import android.webkit.WebView;
  * A page that only takes the events the bridge hands to it, so the game keeps seeing everything
  * else.
  */
-final class WryView extends WebView {
+final class BridgeView extends WebView {
 
     private boolean injecting;
 
-    WryView(Context context) {
+    BridgeView(Context context) {
         super(context);
     }
 

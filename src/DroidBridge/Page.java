@@ -4,13 +4,13 @@ package liquidbounce.DroidBridge;
  * A page in the window of the game. It never leaves the main thread, except for the flags the
  * render thread reads to decide whether the page may be shown.
  */
-final class WryPage {
+final class Page {
 
     static final int LAYER_HUD = 0;
 
     static final int LAYER_SCREEN = 1;
 
-    final WryView view;
+    final BridgeView view;
 
     final long id;
 
@@ -61,15 +61,15 @@ final class WryPage {
     volatile boolean ticking;
 
     /**
-     * The last frame that was read, the header of [WrySnapshot] first.
+     * The last frame that was read, the header of [Snapshot] first.
      */
     volatile byte[] frame;
 
-    WryPage(long id, WryView view) {
+    Page(long id, BridgeView view) {
         this(id, view, LAYER_HUD);
     }
 
-    WryPage(long id, WryView view, int layer) {
+    Page(long id, BridgeView view, int layer) {
         this.id = id;
         this.view = view;
         this.layer = layer;

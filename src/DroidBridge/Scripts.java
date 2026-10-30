@@ -4,7 +4,7 @@ package liquidbounce.DroidBridge;
  * The pieces of javascript the bridge puts into a page. They stay in the page, so an interaction
  * only sends its coordinates or its text instead of the whole handler.
  */
-final class WryScripts {
+final class Scripts {
 
     /**
      * Chrome 116 drops the unprefixed mask properties, which the theme uses to paint the menu icons.
@@ -85,7 +85,7 @@ final class WryScripts {
      * the same css pixel covers as many device pixels as the density says: panels grow, the hud
      * components grow and the settings window keeps its pixel width on a screen that has more.
      *
-     * WryPages declares the page as wide as the screen before it loads, which turns one css pixel
+     * Pages declares the page as wide as the screen before it loads, which turns one css pixel
      * back into one framebuffer pixel and lets the theme behave as it does on the desktop. The
      * values below are therefore in the same unit they have on the desktop and need no fit of
      * their own.
@@ -459,6 +459,6 @@ final class WryScripts {
                 + "return (moved||'nothing')+' | hit '+chain.slice(0,4).join(' < ');";
     }
 
-    private WryScripts() {
+    private Scripts() {
     }
 }

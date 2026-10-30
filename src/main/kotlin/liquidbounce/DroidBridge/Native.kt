@@ -9,7 +9,7 @@ import java.security.MessageDigest
  * Every call comes from the render thread.
  */
 @Suppress("TooManyFunctions")
-internal object WryNative {
+internal object Native {
 
     internal val isAndroid = System.getenv("ANDROID_DATA") != null || File("/system/build.prop").isFile
 
@@ -29,7 +29,7 @@ internal object WryNative {
      * Whether the add-on has a library for this system at all.
      */
     val isSupported: Boolean
-        get() = resource != null && WryNative::class.java.getResource(resource) != null
+        get() = resource != null && Native::class.java.getResource(resource) != null
 
     private var isLoaded = false
 
@@ -44,7 +44,7 @@ internal object WryNative {
             "DroidBridge has no library for ${System.getProperty("os.arch")}"
         }
 
-        val bytes = WryNative::class.java.getResourceAsStream(resource!!)!!.use { it.readBytes() }
+        val bytes = Native::class.java.getResourceAsStream(resource!!)!!.use { it.readBytes() }
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         val file = loadableFolder(folder).resolve(hash.take(16)).resolve(libraryName)
         if (!file.isFile || file.length() != bytes.size.toLong()) {
@@ -137,7 +137,7 @@ internal object WryNative {
     external fun enter(id: Long)
 
     @JvmStatic
-    external fun pollEvents(): Array<WryEvent>?
+    external fun pollEvents(): Array<BridgeEvent>?
 
     @JvmStatic
     external fun setTexture(id: Long, texture: Boolean)
@@ -150,7 +150,7 @@ internal object WryNative {
 /**
  * Something that happened in the native library, see `EventKind` there.
  */
-class WryEvent(
+class BridgeEvent(
     val browser: Long,
     val kind: Int,
     val code: Int,

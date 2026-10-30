@@ -12,43 +12,43 @@ import java.util.concurrent.CountDownLatch;
  * The library finds this class by name and calls the public static methods below, so their names
  * and signatures are part of its interface. Everything else lives in the classes next to it.
  */
-public final class WryBridge {
+public final class Bridge {
 
     public static String start(Application app, String suffix) {
-        WryPages.start(app);
-        return WryPages.prepareDataDirectory(app, suffix);
+        Pages.start(app);
+        return Pages.prepareDataDirectory(app, suffix);
     }
 
     public static void configure(final float clickgui, final float hud, final float settings) {
-        WryPages.configure(clickgui, hud, settings);
+        Pages.configure(clickgui, hud, settings);
     }
 
     public static String create(final Activity activity, final long id, final String url) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            return WryPages.add(activity, id, url);
+            return Pages.add(activity, id, url);
         }
         final String[] outcome = new String[1];
         final CountDownLatch latch = new CountDownLatch(1);
-        WryPages.main().post(new Runnable() {
+        Pages.main().post(new Runnable() {
             @Override
             public void run() {
-                outcome[0] = WryPages.add(activity, id, url);
+                outcome[0] = Pages.add(activity, id, url);
                 latch.countDown();
             }
         });
-        return WryPages.await(latch, outcome);
+        return Pages.await(latch, outcome);
     }
 
     public static boolean loaded(final long id) {
-        WryPage page = WryStack.page(id);
+        Page page = Stack.page(id);
         return page != null && (page.loaded || page.view == null);
     }
 
     public static String setVisible(final long id, final boolean visible) {
-        WryPages.main().post(new Runnable() {
+        Pages.main().post(new Runnable() {
             @Override
             public void run() {
-                WryPage page = WryStack.page(id);
+                Page page = Stack.page(id);
                 if (page == null || page.view == null) {
                     return;
                 }
@@ -63,7 +63,7 @@ public final class WryBridge {
                 if (!page.loaded || !page.drawn) {
                     return;
                 }
-                WryStack.show(page);
+                Stack.show(page);
             }
         });
         return "browser " + id + " visibility " + visible;
@@ -77,23 +77,23 @@ public final class WryBridge {
      * puts the page back above the surface, where the system draws it.
      */
     public static String setTexture(final long id, final boolean texture) {
-        WryPages.main().post(new Runnable() {
+        Pages.main().post(new Runnable() {
             @Override
             public void run() {
-                WryPage page = WryStack.page(id);
+                Page page = Stack.page(id);
                 if (page == null || page.view == null) {
                     return;
                 }
                 page.texture = texture;
                 if (texture) {
                     page.view.setVisibility(android.view.View.VISIBLE);
-                    WryStack.sink(page.view);
-                    WrySnapshot.begin(page);
+                    Stack.sink(page.view);
+                    Snapshot.begin(page);
                     return;
                 }
-                WrySnapshot.end(page);
+                Snapshot.end(page);
                 page.view.setVisibility(android.view.View.INVISIBLE);
-                WryStack.place(page.view);
+                Stack.place(page.view);
             }
         });
         return "browser " + id + " texture " + texture;
@@ -105,11 +105,11 @@ public final class WryBridge {
      * frame every frame of the game.
      */
     public static byte[] snapshot(final long id, final int lastVersion) {
-        WryPage page = WryStack.page(id);
+        Page page = Stack.page(id);
         if (page == null || page.frame == null) {
             return null;
         }
-        if (WrySnapshot.version(page.frame) == lastVersion) {
+        if (Snapshot.version(page.frame) == lastVersion) {
             return null;
         }
         return page.frame;
@@ -117,7 +117,7 @@ public final class WryBridge {
 
     public static void pointer(final long id, final float x, final float y, final int action,
                                final int button, final float amount) {
-        final WryPage page = WryStack.page(id);
+        final Page page = Stack.page(id);
         if (page == null || page.view == null) {
             return;
         }
@@ -128,78 +128,78 @@ public final class WryBridge {
                 return;
             }
             page.hoverPosted = true;
-            WryPages.main().post(new Runnable() {
+            Pages.main().post(new Runnable() {
                 @Override
                 public void run() {
                     page.hoverPosted = false;
-                    WryInput.pointer(page, page.pendingX, page.pendingY, 0, 0, 0f);
+                    PointerInput.pointer(page, page.pendingX, page.pendingY, 0, 0, 0f);
                 }
             });
             return;
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            WryInput.pointer(page, x, y, action, button, amount);
+            PointerInput.pointer(page, x, y, action, button, amount);
             return;
         }
-        WryPages.main().post(new Runnable() {
+        Pages.main().post(new Runnable() {
             @Override
             public void run() {
-                WryInput.pointer(page, x, y, action, button, amount);
+                PointerInput.pointer(page, x, y, action, button, amount);
             }
         });
     }
 
     public static void key(final long id, final int keycode, final boolean pressed) {
-        WryPages.main().post(new Runnable() {
+        Pages.main().post(new Runnable() {
             @Override
             public void run() {
-                WryPage page = WryStack.page(id);
+                Page page = Stack.page(id);
                 if (page == null || page.view == null) {
                     return;
                 }
-                WryInput.key(page, keycode, pressed);
+                PointerInput.key(page, keycode, pressed);
             }
         });
     }
 
     public static void text(final long id, final String value) {
-        WryPages.main().post(new Runnable() {
+        Pages.main().post(new Runnable() {
             @Override
             public void run() {
-                WryPage page = WryStack.page(id);
+                Page page = Stack.page(id);
                 if (page == null || page.view == null) {
                     return;
                 }
-                WryInput.text(page, value);
+                PointerInput.text(page, value);
             }
         });
     }
 
     public static void enter(final long id) {
-        WryPages.main().post(new Runnable() {
+        Pages.main().post(new Runnable() {
             @Override
             public void run() {
-                WryPage page = WryStack.page(id);
+                Page page = Stack.page(id);
                 if (page == null || page.view == null || page.view.getVisibility() != android.view.View.VISIBLE) {
                     return;
                 }
-                WryInput.enter(page);
+                PointerInput.enter(page);
             }
         });
     }
 
     public static String close(final long id) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            WryPages.remove(id);
+            Pages.remove(id);
             return "browser " + id + " closed";
         }
         final String[] outcome = new String[1];
         final CountDownLatch latch = new CountDownLatch(1);
-        WryPages.main().post(new Runnable() {
+        Pages.main().post(new Runnable() {
             @Override
             public void run() {
                 try {
-                    WryPages.remove(id);
+                    Pages.remove(id);
                     outcome[0] = "browser " + id + " closed";
                 } catch (Throwable error) {
                     outcome[0] = "closing browser " + id + " failed: " + error;
@@ -208,21 +208,21 @@ public final class WryBridge {
                 }
             }
         });
-        return WryPages.await(latch, outcome);
+        return Pages.await(latch, outcome);
     }
 
     public static String closeAll() {
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            WryPages.removeAll();
+            Pages.removeAll();
             return "all browsers closed";
         }
         final String[] outcome = new String[1];
         final CountDownLatch latch = new CountDownLatch(1);
-        WryPages.main().post(new Runnable() {
+        Pages.main().post(new Runnable() {
             @Override
             public void run() {
                 try {
-                    WryPages.removeAll();
+                    Pages.removeAll();
                     outcome[0] = "all browsers closed";
                 } catch (Throwable error) {
                     outcome[0] = "closing the browsers failed: " + error;
@@ -231,9 +231,9 @@ public final class WryBridge {
                 }
             }
         });
-        return WryPages.await(latch, outcome);
+        return Pages.await(latch, outcome);
     }
 
-    private WryBridge() {
+    private Bridge() {
     }
 }

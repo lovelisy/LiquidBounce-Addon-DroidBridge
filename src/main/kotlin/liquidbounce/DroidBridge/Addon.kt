@@ -9,10 +9,12 @@ import org.apache.logging.log4j.LogManager
 /**
  * Shows the client's interface with the web view of Android, on top of the game.
  */
-class WryAddon : LiquidBounceAddon() {
+class Addon : LiquidBounceAddon() {
 
     override fun onInitialize() {
-        if (!WryNative.isSupported) {
+        disableDeepLearning()
+
+        if (!Native.isSupported) {
             LogManager.getLogger("LiquidBounce/DroidBridge").warn(
                 "DroidBridge has no library for ${System.getProperty("os.arch")}"
             )
@@ -25,9 +27,18 @@ class WryAddon : LiquidBounceAddon() {
                 "droidbridge",
                 "DroidBridge",
                 "The web view of Android, drawn on top of the game.",
-                create = ::WryBrowserBackend
+                create = ::BrowserBackend
             )
         )
+    }
+
+    private fun disableDeepLearning() {
+        System.setProperty("DJL_OFFLINE", "true")
+        runCatching {
+            val field = Class.forName("ai.djl.util.Utils").getDeclaredField("offline")
+            field.isAccessible = true
+            field.set(null, true)
+        }
     }
 
 }
@@ -42,10 +53,10 @@ internal object DroidBridgeSettings :
     private val settingsScale by float("SettingsScale", 1f, 0.5f..2f).onChanged { apply() }
 
     fun apply() {
-        if (!WryNative.isSupported) {
+        if (!Native.isSupported) {
             return
         }
-        runCatching { WryNative.configure(clickgui, hud, settingsScale) }
+        runCatching { Native.configure(clickgui, hud, settingsScale) }
     }
 
 }

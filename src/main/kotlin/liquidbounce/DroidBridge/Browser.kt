@@ -1,7 +1,7 @@
 package liquidbounce.DroidBridge
 
 import net.ccbluex.liquidbounce.integration.backend.BrowserTexture
-import net.ccbluex.liquidbounce.integration.backend.browser.Browser
+import net.ccbluex.liquidbounce.integration.backend.browser.Browser as LbBrowser
 import net.ccbluex.liquidbounce.integration.backend.browser.BrowserRenderer
 import net.ccbluex.liquidbounce.integration.backend.browser.BrowserSettings
 import net.ccbluex.liquidbounce.integration.backend.browser.BrowserState
@@ -24,15 +24,15 @@ import org.joml.component2
  * Everything that reaches the native library happens on the render thread.
  */
 @Suppress("TooManyFunctions")
-class WryBrowser internal constructor(
-    private val backend: WryBrowserBackend,
+class Browser internal constructor(
+    private val backend: BrowserBackend,
     url: String,
     viewport: BrowserViewport,
     val settings: BrowserSettings,
     override var priority: Short = 0,
     override val isIncognito: Boolean = false,
     inputAcceptor: InputAcceptor? = null
-) : Browser, InputHandler {
+) : LbBrowser, InputHandler {
 
     internal val id: Long
 
@@ -51,7 +51,7 @@ class WryBrowser internal constructor(
 
         val quality = GlobalBrowserSettings.quality
         val (width, height) = size
-        id = WryNative.createBrowser(url, width, height, quality.toDouble(), isIncognito, settings.currentFps)
+        id = Native.createBrowser(url, width, height, quality.toDouble(), isIncognito, settings.currentFps)
 
         logger.info("Initialized browser (url='$url')")
     }
@@ -83,7 +83,7 @@ class WryBrowser internal constructor(
                 val scaled = value.getScaledDimensions(quality)
                 if (scaled != size) {
                     size = scaled
-                    WryNative.resize(id, scaled.x(), scaled.y(), quality.toDouble())
+                    Native.resize(id, scaled.x(), scaled.y(), quality.toDouble())
                 }
             }
         }
@@ -99,7 +99,7 @@ class WryBrowser internal constructor(
             currentUrl = value
             onRenderThread {
                 state = BrowserState.Idle
-                WryNative.navigate(id, value)
+                Native.navigate(id, value)
             }
         }
 
@@ -108,7 +108,7 @@ class WryBrowser internal constructor(
      * of it, unless the page is switched to a texture of its own, in which case the frames that are
      * read from it are published here and drawn by the game below its screens.
      */
-    private val ownTexture = WryTexture(id)
+    private val ownTexture = Texture(id)
 
     override val texture: BrowserTexture?
         get() = if (textureMode) ownTexture.browserTexture else null
@@ -116,13 +116,13 @@ class WryBrowser internal constructor(
     private val textureMode: Boolean
         get() = isHudPage()
 
-    override fun forceReload() = onRenderThread { WryNative.reload(id, true) }
+    override fun forceReload() = onRenderThread { Native.reload(id, true) }
 
-    override fun reload() = onRenderThread { WryNative.reload(id, false) }
+    override fun reload() = onRenderThread { Native.reload(id, false) }
 
-    override fun goForward() = onRenderThread { WryNative.goForward(id) }
+    override fun goForward() = onRenderThread { Native.goForward(id) }
 
-    override fun goBack() = onRenderThread { WryNative.goBack(id) }
+    override fun goBack() = onRenderThread { Native.goBack(id) }
 
     override fun close() {
         renderer.close()
@@ -136,7 +136,7 @@ class WryBrowser internal constructor(
             }
             isClosed = true
             if (backend.isInitialized) {
-                WryNative.closeBrowser(id)
+                Native.closeBrowser(id)
             }
         }
     }
@@ -152,7 +152,7 @@ class WryBrowser internal constructor(
     // The page is a view of the system, it invalidates itself
     override fun invalidate() = Unit
 
-    override fun toString() = "WryBrowser(" +
+    override fun toString() = "Browser(" +
         "id=$id, " +
         "url='$currentUrl', " +
         "incognito=$isIncognito, " +
@@ -188,7 +188,7 @@ class WryBrowser internal constructor(
             return
         }
         shownScreen = show
-        onRenderThread { WryNative.setVisible(id, show) }
+        onRenderThread { Native.setVisible(id, show) }
     }
 
     private fun isHudPage(): Boolean =
@@ -215,73 +215,73 @@ class WryBrowser internal constructor(
      */
     internal fun updateFrame() {
         if (textureMode && !textureOn) {
-            WryNative.setTexture(id, true)
+            Native.setTexture(id, true)
             textureOn = true
         } else if (!textureMode && textureOn) {
-            WryNative.setTexture(id, false)
+            Native.setTexture(id, false)
             textureOn = false
         }
         pushVisible()
     }
 
-    internal fun onEvent(event: WryEvent) {
+    internal fun onEvent(event: BridgeEvent) {
         when (event.kind) {
-            WryNative.EVENT_LOADING -> state = BrowserState.Loading
-            WryNative.EVENT_LOADED -> state = BrowserState.Success(event.code)
-            WryNative.EVENT_FAILED ->
+            Native.EVENT_LOADING -> state = BrowserState.Loading
+            Native.EVENT_LOADED -> state = BrowserState.Success(event.code)
+            Native.EVENT_FAILED ->
                 state = BrowserState.Failure(event.code, event.detail, event.text.ifEmpty { currentUrl })
-            WryNative.EVENT_URL -> if (event.text.isNotEmpty()) {
+            Native.EVENT_URL -> if (event.text.isNotEmpty()) {
                 currentUrl = event.text
             }
-            WryNative.EVENT_CONSOLE -> Unit
-            WryNative.EVENT_CURSOR -> if (visible) {
-                mc.window.selectCursor(WryInput.cursor(event.text))
+            Native.EVENT_CONSOLE -> Unit
+            Native.EVENT_CURSOR -> if (visible) {
+                mc.window.selectCursor(Input.cursor(event.text))
             }
         }
     }
 
     override fun mouseClicked(mouseX: Double, mouseY: Double, mouseButton: Int) {
-        val button = WryInput.mouseButton(mouseButton) ?: return
+        val button = Input.mouseButton(mouseButton) ?: return
         val (x, y) = viewport.transformMouse(mouseX, mouseY, GlobalBrowserSettings.quality)
 
         native {
-            WryNative.mouseButton(id, x.toDouble(), y.toDouble(), button, true)
+            Native.mouseButton(id, x.toDouble(), y.toDouble(), button, true)
         }
     }
 
     override fun mouseReleased(mouseX: Double, mouseY: Double, mouseButton: Int) {
-        val button = WryInput.mouseButton(mouseButton) ?: return
+        val button = Input.mouseButton(mouseButton) ?: return
         val (x, y) = viewport.transformMouse(mouseX, mouseY, GlobalBrowserSettings.quality)
 
-        native { WryNative.mouseButton(id, x.toDouble(), y.toDouble(), button, false) }
+        native { Native.mouseButton(id, x.toDouble(), y.toDouble(), button, false) }
     }
 
     override fun mouseMoved(mouseX: Double, mouseY: Double) {
         val (x, y) = viewport.transformMouse(mouseX, mouseY, GlobalBrowserSettings.quality)
 
-        native { WryNative.mouseMove(id, x.toDouble(), y.toDouble()) }
+        native { Native.mouseMove(id, x.toDouble(), y.toDouble()) }
     }
 
     override fun mouseScrolled(mouseX: Double, mouseY: Double, delta: Double) {
         val (x, y) = viewport.transformMouse(mouseX, mouseY, GlobalBrowserSettings.quality)
 
-        native { WryNative.mouseScroll(id, x.toDouble(), y.toDouble(), delta) }
+        native { Native.mouseScroll(id, x.toDouble(), y.toDouble(), delta) }
     }
 
     override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int) = native {
-        WryNative.key(id, true, keyCode, scanCode, modifiers)
+        Native.key(id, true, keyCode, scanCode, modifiers)
     }
 
     override fun keyReleased(keyCode: Int, scanCode: Int, modifiers: Int) = native {
-        WryNative.key(id, false, keyCode, scanCode, modifiers)
+        Native.key(id, false, keyCode, scanCode, modifiers)
     }
 
     override fun charTyped(codepoint: Int) = native {
         when (codepoint) {
-            0x08 -> WryNative.text(id, "\b")
-            0x0A, 0x0D -> WryNative.enter(id)
+            0x08 -> Native.text(id, "\b")
+            0x0A, 0x0D -> Native.enter(id)
             else -> if (codepoint >= 0x20 && codepoint != 0x7F) {
-                WryNative.text(id, String(Character.toChars(codepoint)))
+                Native.text(id, String(Character.toChars(codepoint)))
             }
         }
     }
