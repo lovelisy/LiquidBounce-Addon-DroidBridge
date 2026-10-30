@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.injection.At
 import org.spongepowered.asm.mixin.injection.Inject
 import kotlin.coroutines.Continuation
 
-@Mixin(value = DeepLearningEngine::class, remap = false)
+@Mixin(value = [DeepLearningEngine::class], remap = false)
 class MixinDeepLearningEngine {
 
     @Inject(method = ["init"], at = [At("HEAD")], remap = false)

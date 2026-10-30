@@ -12,8 +12,6 @@ import org.apache.logging.log4j.LogManager
 class Addon : LiquidBounceAddon() {
 
     override fun onInitialize() {
-        disableDeepLearning()
-
         if (!Native.isSupported) {
             LogManager.getLogger("LiquidBounce/DroidBridge").warn(
                 "DroidBridge has no library for ${System.getProperty("os.arch")}"
@@ -30,15 +28,6 @@ class Addon : LiquidBounceAddon() {
                 create = ::BrowserBackend
             )
         )
-    }
-
-    private fun disableDeepLearning() {
-        System.setProperty("DJL_OFFLINE", "true")
-        runCatching {
-            val field = Class.forName("ai.djl.util.Utils").getDeclaredField("offline")
-            field.isAccessible = true
-            field.set(null, true)
-        }
     }
 
 }
