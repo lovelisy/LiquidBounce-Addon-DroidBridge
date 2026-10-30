@@ -154,10 +154,11 @@ class WryBrowser internal constructor(
      * world. [visible] only tells whether the screen that owns this tab asked for it; the main tab is
      * never asked, so it is shown whenever a client screen is open.
      *
-     * The hud is the exception. The game draws it as an overlay under every native screen, so a
-     * screen the client does not own hides it by simply covering it. A web view is a view of its
-     * own and stays above the game, so the hud has to be taken down while such a screen is open
-     * instead of being painted over.
+     * The hud is not decided here. ModuleHud writes the result of its own rule into [visible] - the
+     * vanilla hud toggle, the disconnect and loading screens and the hud editor inside the click gui -
+     * so this only adds the part the rule cannot express. The game hides its hud on a native screen by
+     * painting over it, while a web view is a view of its own that stays above the game, so it has to
+     * be taken down while such a screen is open instead of being covered.
      */
     private fun pushVisible() {
         val screen = mc.gui.screen()
@@ -165,7 +166,7 @@ class WryBrowser internal constructor(
         val show = if (priority > 0 || inputListener != null) {
             clientScreen && (visible || ScreenManager.mainBrowser === this)
         } else if (isHudPage()) {
-            visible && mc.player != null && (screen == null || clientScreen)
+            visible && screen == null
         } else {
             visible && (clientScreen || mc.player != null)
         }
