@@ -83,36 +83,6 @@ final class Stack {
     }
 
     /**
-     * Puts a page below the surface of the game. The surface is opaque, so the page is covered by
-     * the game and never seen; only the frames that are read from it reach the screen.
-     */
-    static String sink(View view) {
-        ViewParent parent = view.getParent();
-        if (!(parent instanceof ViewGroup)) {
-            return "not attached";
-        }
-        View surface = findSurface((ViewGroup) parent, view);
-        if (surface == null) {
-            return "no game surface";
-        }
-        ViewParent surfaceParent = surface.getParent();
-        if (!(surfaceParent instanceof ViewGroup)) {
-            return "surface has no container";
-        }
-        ViewGroup holder = (ViewGroup) surfaceParent;
-        if (holder.getChildAt(0) == view) {
-            return "already below the surface";
-        }
-        if (holder != parent) {
-            ((ViewGroup) parent).removeView(view);
-        }
-        holder.removeView(view);
-        holder.addView(view, 0, view.getLayoutParams());
-        fit(holder, view);
-        return "sunk to " + holder.indexOfChild(view) + " of " + holder.getChildCount();
-    }
-
-    /**
      * A page belongs above the surface and above every page of a lower layer, but below every page
      * of a higher one, so the hud never covers a screen and a screen never covers its own input.
      */

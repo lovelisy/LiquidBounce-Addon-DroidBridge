@@ -53,9 +53,6 @@ public final class Bridge {
                     return;
                 }
                 page.wanted = visible;
-                if (page.texture) {
-                    return;
-                }
                 if (!visible) {
                     page.view.setVisibility(android.view.View.INVISIBLE);
                     return;
@@ -67,52 +64,6 @@ public final class Bridge {
             }
         });
         return "browser " + id + " visibility " + visible;
-    }
-
-    /**
-     * Switches a page between being stacked above the game and being drawn on a texture of the game.
-     *
-     * A page on a texture is placed below the surface of the game, so the game covers it the way it
-     * covers its own hud, and only the frames that are read from it are ever seen. Turning that off
-     * puts the page back above the surface, where the system draws it.
-     */
-    public static String setTexture(final long id, final boolean texture) {
-        Pages.main().post(new Runnable() {
-            @Override
-            public void run() {
-                Page page = Stack.page(id);
-                if (page == null || page.view == null) {
-                    return;
-                }
-                page.texture = texture;
-                if (texture) {
-                    page.view.setVisibility(android.view.View.VISIBLE);
-                    Stack.sink(page.view);
-                    Snapshot.begin(page);
-                    return;
-                }
-                Snapshot.end(page);
-                page.view.setVisibility(android.view.View.INVISIBLE);
-                Stack.place(page.view);
-            }
-        });
-        return "browser " + id + " texture " + texture;
-    }
-
-    /**
-     * The last frame of a page that is drawn on a texture, or null when it drew nothing new since
-     * [lastVersion]. Comparing the version here is what keeps a still page from copying its whole
-     * frame every frame of the game.
-     */
-    public static byte[] snapshot(final long id, final int lastVersion) {
-        Page page = Stack.page(id);
-        if (page == null || page.frame == null) {
-            return null;
-        }
-        if (Snapshot.version(page.frame) == lastVersion) {
-            return null;
-        }
-        return page.frame;
     }
 
     public static void pointer(final long id, final float x, final float y, final int action,

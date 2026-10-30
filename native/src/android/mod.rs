@@ -94,29 +94,6 @@ impl Engine {
         }
     }
 
-    pub fn set_texture(&mut self, id: BrowserId, texture: bool) {
-        let Some(bridge) = self.bridge.as_ref() else {
-            return;
-        };
-        if let Err(error) = bridge.set_texture(id as i64, texture) {
-            api::warn(format!("[DroidBridge] switching the web view to a texture failed: {error}"));
-        }
-    }
-
-    /// The last frame of a page that is drawn on a texture, or an empty vector when there is none.
-    pub fn snapshot(&mut self, id: BrowserId, last_version: i32) -> Vec<u8> {
-        let Some(bridge) = self.bridge.as_ref() else {
-            return Vec::new();
-        };
-        match bridge.snapshot(id as i64, last_version) {
-            Ok(frame) => frame,
-            Err(error) => {
-                api::warn(format!("[DroidBridge] reading a frame of the web view failed: {error}"));
-                Vec::new()
-            }
-        }
-    }
-
     pub fn configure(&mut self, clickgui: f32, hud: f32, settings: f32) {
         let Some(bridge) = self.bridge.as_ref() else {
             return;

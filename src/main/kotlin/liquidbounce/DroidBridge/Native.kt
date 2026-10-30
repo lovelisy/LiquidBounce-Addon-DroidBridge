@@ -139,12 +139,6 @@ internal object Native {
     @JvmStatic
     external fun pollEvents(): Array<BridgeEvent>?
 
-    @JvmStatic
-    external fun setTexture(id: Long, texture: Boolean)
-
-    @JvmStatic
-    external fun snapshot(id: Long, lastVersion: Int): ByteArray?
-
 }
 
 /**

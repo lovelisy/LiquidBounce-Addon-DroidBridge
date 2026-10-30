@@ -44,7 +44,6 @@ class Browser internal constructor(
     private var size = viewport.getScaledDimensions(GlobalBrowserSettings.quality)
     private var isClosed = false
     private var shownScreen = false
-    private var textureOn = false
 
     init {
         require(url.isNotEmpty()) { "URL cannot be empty." }
@@ -103,18 +102,8 @@ class Browser internal constructor(
             }
         }
 
-    /**
-     * The web view of the system is drawn by the system on top of the game, so the game has no texture
-     * of it, unless the page is switched to a texture of its own, in which case the frames that are
-     * read from it are published here and drawn by the game below its screens.
-     */
-    private val ownTexture = Texture(id)
-
     override val texture: BrowserTexture?
-        get() = if (textureMode) ownTexture.browserTexture else null
-
-    private val textureMode: Boolean
-        get() = isHudPage()
+        get() = null
 
     override fun forceReload() = onRenderThread { Native.reload(id, true) }
 
@@ -128,7 +117,6 @@ class Browser internal constructor(
         renderer.close()
         inputListener?.close()
         backend.removeBrowser(this)
-        ownTexture.close()
 
         onRenderThread {
             if (isClosed) {
@@ -181,9 +169,6 @@ class Browser internal constructor(
         } else {
             visible && (clientScreen || mc.player != null)
         }
-        if (textureMode) {
-            return
-        }
         if (show == shownScreen) {
             return
         }
@@ -202,25 +187,9 @@ class Browser internal constructor(
     private fun keepsHud(screen: Screen?): Boolean = screen is ChatScreen
 
     /**
-     * Reads the latest frame of the page into the texture the game draws, while the page is a texture.
-     */
-    internal fun pollTexture() {
-        if (textureMode) {
-            ownTexture.poll()
-        }
-    }
-
-    /**
      * Pushes what the game tells the web view this frame.
      */
     internal fun updateFrame() {
-        if (textureMode && !textureOn) {
-            Native.setTexture(id, true)
-            textureOn = true
-        } else if (!textureMode && textureOn) {
-            Native.setTexture(id, false)
-            textureOn = false
-        }
         pushVisible()
     }
 

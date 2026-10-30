@@ -235,13 +235,15 @@ final class Pages {
                     target.evaluateJavascript(Scripts.DISPATCH_SETUP, null);
                     target.evaluateJavascript(Scripts.MASKS, null);
                     target.evaluateJavascript(Scripts.SCALE, null);
-                    target.evaluateJavascript(Scripts.VIEWPORT, new android.webkit.ValueCallback<String>() {
-                        @Override
-                        public void onReceiveValue(String value) {
-                            android.util.Log.i("DroidBridge", "viewport " + value
-                                    + " of " + target.getWidth());
-                        }
-                    });
+                    if (page != null && (page.contains("/hud") || page.contains("/clickgui"))) {
+                        target.evaluateJavascript(Scripts.VIEWPORT, new android.webkit.ValueCallback<String>() {
+                            @Override
+                            public void onReceiveValue(String value) {
+                                android.util.Log.i("DroidBridge", "viewport " + value
+                                        + " of " + target.getWidth());
+                            }
+                        });
+                    }
                     target.evaluateJavascript(Scripts.FONTS, null);
                     Stack.awaitVisualState(target);
                 }
@@ -370,17 +372,6 @@ final class Pages {
             remove(id);
         }
     }
-
-    /**
-     * Records how long the last frame of a page took to draw, for the log to tell whether the game is
-     * keeping up with the page.
-     */
-    static void metric(int width, int height, int millis, int painted) {
-        lastMetric = "page " + width + "x" + height + " drew in " + millis + " ms, " + painted
-                + " pixels painted";
-    }
-
-    private static volatile String lastMetric = "";
 
     static String await(CountDownLatch latch, String[] outcome) {
         try {

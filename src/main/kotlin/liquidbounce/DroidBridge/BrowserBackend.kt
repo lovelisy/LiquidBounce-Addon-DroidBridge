@@ -68,7 +68,6 @@ class BrowserBackend : LbBrowserBackend, EventListener {
             pollEvents()
             for (browser in browsers) {
                 browser.updateFrame()
-                browser.pollTexture()
             }
         } catch (e: Exception) {
             logger.error("Failed to update the browsers", e)
