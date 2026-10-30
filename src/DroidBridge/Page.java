@@ -14,8 +14,6 @@ final class Page {
 
     final long id;
 
-    final int layer;
-
     volatile boolean loaded;
 
     volatile boolean drawn;
@@ -51,13 +49,8 @@ final class Page {
     boolean sent;
 
     Page(long id, BridgeView view) {
-        this(id, view, LAYER_HUD);
-    }
-
-    Page(long id, BridgeView view, int layer) {
         this.id = id;
         this.view = view;
-        this.layer = layer;
     }
 
     boolean sameSpot(float x, float y) {

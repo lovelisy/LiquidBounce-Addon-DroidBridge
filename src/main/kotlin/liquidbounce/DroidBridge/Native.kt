@@ -11,8 +11,6 @@ import java.security.MessageDigest
 @Suppress("TooManyFunctions")
 internal object Native {
 
-    internal val isAndroid = System.getenv("ANDROID_DATA") != null || File("/system/build.prop").isFile
-
     private val arch: String? = when (System.getProperty("os.arch").lowercase()) {
         "amd64", "x86_64" -> "x64"
         "aarch64", "arm64" -> "arm64"

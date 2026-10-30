@@ -28,11 +28,6 @@ repositories {
     }
 }
 
-// The pages are drawn by the web view of Android, so the access widener only covers the client's integration API.
-loom {
-    accessWidenerPath = file("src/main/resources/liquidbounce-droidbridge.accesswidener")
-}
-
 // Two things to leave alone here:
 //
 // 1. There is no `mappings(...)` line. LiquidBounce declares none either, and Loom defaults to

@@ -20,7 +20,6 @@
       "liquidbounce.DroidBridge.Addon"
     ]
   },
-  "accessWidener": "liquidbounce-droidbridge.accesswidener",
   "mixins": [
     "droidbridge.mixins.json"
   ],

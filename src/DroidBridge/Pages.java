@@ -259,7 +259,7 @@ final class Pages {
             activity.addContentView(view, params);
             int layer = Page.layerOfUrl(url);
             Stack.tag(view, id, layer);
-            Page created = new Page(id, view, layer);
+            Page created = new Page(id, view);
             Stack.put(created);
             String stacking = Stack.place(view);
             view.setAlpha(0f);
