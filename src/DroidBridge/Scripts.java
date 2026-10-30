@@ -118,8 +118,7 @@ final class Scripts {
                     + "var v=window.innerWidth||0;"
                     + "if(w>0&&v>0){"
                     + "var u=w/v;"
-                    + "if(isFinite(u)&&u>1){return u;}"
-                    + "if(isFinite(u)&&u>0){return 1;}"
+                    + "if(isFinite(u)&&u>1.01){return u;}"
                     + "}"
                     + "var d=window.devicePixelRatio||1;"
                     + "return d>1.01?d:1;"
@@ -255,6 +254,8 @@ final class Scripts {
                     + "});"
                     + "window.__wryHudFitObserver.observe(document.documentElement,{childList:true,subtree:true});"
                     + "}"
+                    + "setTimeout(function(){if(window.__wryScale){window.__wryScale();}},100);"
+                    + "setTimeout(function(){if(window.__wryScale){window.__wryScale();}},350);"
                     + "return window.__wryScale();"
                     + "})()";
 

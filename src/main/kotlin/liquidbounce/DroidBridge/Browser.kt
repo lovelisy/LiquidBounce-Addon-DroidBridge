@@ -202,7 +202,7 @@ class Browser internal constructor(
             Native.EVENT_URL -> if (event.text.isNotEmpty()) {
                 currentUrl = event.text
             }
-            Native.EVENT_CONSOLE -> Unit
+            Native.EVENT_CONSOLE -> logger.info(event.text)
             Native.EVENT_CURSOR -> if (visible) {
                 mc.window.selectCursor(Input.cursor(event.text))
             }
