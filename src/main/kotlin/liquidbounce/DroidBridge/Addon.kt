@@ -26,6 +26,7 @@ class Addon : LiquidBounceAddon() {
                 "droidbridge",
                 "DroidBridge",
                 "The web view of Android, drawn on top of the game.",
+                selectable = false,
                 create = ::BrowserBackend
             )
         )
