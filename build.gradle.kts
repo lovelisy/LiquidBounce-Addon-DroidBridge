@@ -77,40 +77,6 @@ tasks.processResources {
     }
 }
 
-// The native library goes into the jar under natives/<os>-<arch>/. CI builds it and passes the directory with
-// -Pnatives=<dir>; without it, the library is built with cargo for this machine only.
-val nativesDir = providers.gradleProperty("natives").map { file(it) }
-val hostPlatform = "android-" + when (System.getProperty("os.arch")) {
-    "amd64", "x86_64" -> "x64"
-    "aarch64", "arm64" -> "arm64"
-    else -> System.getProperty("os.arch")
-}
-val nativeLibrary = "libliquidbounce_droidbridge.so"
-
-val cargoBuild = tasks.register<Exec>("cargoBuild") {
-    description = "Builds the native library for this machine."
-    onlyIf { !nativesDir.isPresent }
-    workingDir = file("native")
-    commandLine("cargo", "build", "--release")
-    inputs.dir("native/src")
-    inputs.files("native/Cargo.toml", "native/Cargo.lock")
-    outputs.file("native/target/release/$nativeLibrary")
-}
-
-val collectNatives = tasks.register<Sync>("collectNatives") {
-    dependsOn(cargoBuild)
-    into(layout.buildDirectory.dir("natives"))
-    if (nativesDir.isPresent) {
-        from(nativesDir)
-    } else {
-        from("native/target/release/$nativeLibrary") { into(hostPlatform) }
-    }
-}
-
-tasks.processResources {
-    from(collectNatives) { into("natives") }
-}
-
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
     options.release = libs.versions.jdk.get().toInt()

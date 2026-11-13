@@ -11,68 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  native:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    defaults:
-      run:
-        shell: bash
-        working-directory: native
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Update Rust
-        run: |
-          rustup update stable --no-self-update && rustup default stable
-          rustup target add aarch64-linux-android
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: native
-          key: android-arm64
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-      - name: Build the bridge
-        run: |
-          set -euo pipefail
-          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
-          [ -d "$SDK" ] || { echo "[ERROR] no Android SDK at '$SDK'" >&2; exit 1; }
-          API="$(ls "$SDK/platforms" | sed 's/^android-//' | sort -n | tail -1)"
-          TOOLS="$(ls "$SDK/build-tools" | sort -V | tail -1)"
-          mkdir -p ../src/DroidBridge/classes ../src/DroidBridge/dex
-          javac -source 8 -target 8 -bootclasspath "$SDK/platforms/android-$API/android.jar" \
-            -d ../src/DroidBridge/classes \
-            $(find ../src/DroidBridge -name '*.java' -not -path '*/classes/*')
-          "$SDK/build-tools/$TOOLS/d8" --min-api 21 \
-            --lib "$SDK/platforms/android-$API/android.jar" \
-            --output ../src/DroidBridge/dex \
-            $(find ../src/DroidBridge/classes -name '*.class')
-          cp ../src/DroidBridge/dex/classes.dex android-bridge.dex
-      - name: Build
-        run: |
-          set -euo pipefail
-          NDK="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-}}"
-          [ -d "$NDK" ] || { echo "[ERROR] no Android NDK at '$NDK'" >&2; exit 1; }
-          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/aarch64-linux-android21-clang"
-          export CC_aarch64_linux_android="$TOOLCHAIN/aarch64-linux-android21-clang"
-          export AR_aarch64_linux_android="$TOOLCHAIN/llvm-ar"
-          cargo build --release --lib --target aarch64-linux-android
-      - name: Collect library
-        run: |
-          mkdir -p ../natives/android-arm64
-          cp target/aarch64-linux-android/release/libliquidbounce_droidbridge.so ../natives/android-arm64/
-      - name: Upload library
-        uses: actions/upload-artifact@v4
-        with:
-          name: natives-android-arm64
-          path: natives/
-
   build:
-    needs: [ native ]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -85,28 +24,13 @@ jobs:
           java-version: '25'
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-      - name: Download libraries
-        uses: actions/download-artifact@v4
-        with:
-          pattern: natives-*
-          path: natives
-          merge-multiple: true
       - name: Build
-        run: ./gradlew build -Pnatives=natives
-      - name: Check the library in the jar
-        run: |
-          set -euo pipefail
-          JAR=$(find build/libs -name '*.jar' -not -name '*-sources.jar' | head -n1)
-          [ -n "$JAR" ] || { echo "[ERROR] no jar in build/libs" >&2; exit 1; }
-          unzip -l "$JAR" | grep 'natives/'
-          unzip -l "$JAR" | grep -q 'natives/android-arm64/libliquidbounce_droidbridge.so'
-
+        run: ./gradlew build
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: addon
           path: build/libs/*.jar
-
       - name: Publish snapshot release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -119,7 +43,7 @@ jobs:
 
           NOTES="Automatic build of \`${GITHUB_SHA::7}\` from \`main\`.
 
-          Not a stable release - it tracks whatever is on main right now."
+          CEF backend only, rendered by the client through the Mcef engine plugin."
 
           gh release delete snapshot --cleanup-tag --yes || true
           gh release create snapshot "$JAR" \
