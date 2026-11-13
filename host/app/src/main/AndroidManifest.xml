@@ -19,7 +19,7 @@
 
         <!-- 主入口：miuix 设置/状态页 -->
         <activity
-            android:name=".SettingsActivity"
+            android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name">
             <intent-filter>

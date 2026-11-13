@@ -535,7 +535,7 @@ class CefriumHostService : Service() {
     private fun buildNotification(): android.app.Notification {
         val open = PendingIntent.getActivity(
             this, 0,
-            Intent(this, Class.forName("liquidbounce.droidbridge.host.SettingsActivity")),
+            Intent(this, Class.forName("liquidbounce.droidbridge.host.MainActivity")),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val active = browsers.size
