@@ -26,7 +26,7 @@ plugins {
 
 android {
     namespace = "liquidbounce.droidbridge.host"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "liquidbounce.droidbridge.host"
