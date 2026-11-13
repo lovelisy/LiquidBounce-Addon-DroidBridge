@@ -3,6 +3,7 @@ name: Build DroidBridge Host
 on:
   workflow_dispatch:
   push:
+    branches: [app]
     paths:
       - 'host/**'
       - '.github/workflows/host.yml'
