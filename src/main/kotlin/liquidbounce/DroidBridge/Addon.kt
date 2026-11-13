@@ -4,6 +4,7 @@ import net.ccbluex.liquidbounce.features.addon.LiquidBounceAddon
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.ModuleCategories
 import net.ccbluex.liquidbounce.integration.backend.BrowserBackendProvider
+import liquidbounce.DroidBridge.cef.CefBrowserBackend
 import org.apache.logging.log4j.LogManager
 
 /**
@@ -26,6 +27,14 @@ class Addon : LiquidBounceAddon() {
                 "DroidBridge",
                 "The web view of Android, drawn on top of the game.",
                 create = ::BrowserBackend
+            )
+        )
+        registerBrowserBackend(
+            BrowserBackendProvider(
+                "droidbridge-cef",
+                "DroidBridge CEF",
+                "Chromium through the Mcef engine plugin, drawn by the client.",
+                create = ::CefBrowserBackend
             )
         )
     }
