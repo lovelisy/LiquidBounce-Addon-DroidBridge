@@ -5,7 +5,12 @@ on:
   push:
     branches: [app]
     paths:
-      - 'host/**'
+      - 'app/**'
+      - 'buildSrc/**'
+      - 'gradle/**'
+      - '*.kts'
+      - '*.properties'
+      - 'gradlew*'
       - '.github/workflows/host.yml'
 
 jobs:
@@ -33,7 +38,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build host APK
-        working-directory: host
+        
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
@@ -41,5 +46,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: droidbridge-host
-          path: host/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
