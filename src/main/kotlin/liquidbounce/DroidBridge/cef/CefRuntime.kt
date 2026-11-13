@@ -67,7 +67,7 @@ internal object CefRuntime {
             ?: error("DroidBridge 里没有 $resource")
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it) }
-        val file = folder.resolve("lib").resolve(hash.take(16)).resolve("libmcef.so")
+        val file = loadableFolder().resolve(hash.take(16)).resolve("libmcef.so")
         if (!file.isFile || file.length() != bytes.size.toLong()) {
             file.parentFile.mkdirs()
             val temporary = File(file.parentFile, "libmcef.so.tmp")
@@ -75,6 +75,12 @@ internal object CefRuntime {
             temporary.renameTo(file)
         }
         return file
+    }
+
+    private fun loadableFolder(): File {
+        val writable = System.getenv("TMPDIR")?.takeIf(String::isNotBlank)
+            ?: System.getProperty("java.io.tmpdir")?.takeIf(String::isNotBlank)
+        return writable?.let { File(it, "droidbridge-cef") } ?: folder.resolve("lib")
     }
 
 }
