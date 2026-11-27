@@ -2,16 +2,13 @@
 
 A [LiquidBounce](https://github.com/CCBlueX/LiquidBounce) add-on that renders the client's web UI with CEF on Android.
 
-Chromium cannot run inside Minecraft's JVM on Android, so the add-on talks to a separate host process instead. Frames
-come back as BGRA over `127.0.0.1:39090` and are uploaded as a texture, which lets LiquidBounce draw the page with its
-own render pipeline.
+Chromium runs in the official [MCEF Engine Plugin](https://github.com/RainClay/Mcef-Android) host process, not inside
+Minecraft's JVM. Frames come back as BGRA over `127.0.0.1:39090` and are uploaded as a texture. This repository only
+builds the add-on jar; the host APK is not built or bundled here.
 
-The host is the official **MCEF Engine Plugin**: it owns `libcef.so`, runs the CEF browser and serves the IPC bridge.
-This repository only builds the add-on jar; it does not build, bundle or redistribute the host APK.
-
-| Host APK | Where it comes from |
+| Host APK | Source |
 |---|---|
-| `McefEnginePlugin-0.18.1-arm64-v8a.apk` | [RainClay/Mcef-Android · v0.18.1-plugin](https://github.com/RainClay/Mcef-Android/releases/tag/v0.18.1-plugin) |
+| `McefEnginePlugin-0.18.1-arm64-v8a.apk` | [MCEF Engine Plugin v0.18.1](https://github.com/RainClay/Mcef-Android/releases/tag/v0.18.1-plugin) |
 
 ## Requirements
 
@@ -66,7 +63,8 @@ This project is licensed under GPL-3.0 (see `LICENSE`).
 | Component | License | Source |
 |---|---|---|
 | LiquidBounce | GPL-3.0 | https://github.com/CCBlueX/LiquidBounce |
-| MCEF-Android JNI bindings (`McefNative`, `GlfwToAndroidKey`) | GPL-3.0-or-later, Copyright (C) 2026 Rain_Clay and contributors | MCEF Engine Plugin |
+| MCEF Engine Plugin (host APK, IPC protocol 2) | GPL-3.0 | [RainClay/Mcef-Android](https://github.com/RainClay/Mcef-Android) · [v0.18.1-plugin](https://github.com/RainClay/Mcef-Android/releases/tag/v0.18.1-plugin) |
+| MCEF-Android JNI bindings (`McefNative`, `GlfwToAndroidKey`) | GPL-3.0-or-later, Copyright (C) 2026 Rain_Clay and contributors | https://github.com/RainClay/Mcef-Android |
 | `libmcef.so` | GPL-3.0-or-later, from the MCEF Engine Plugin | https://github.com/RainClay/Mcef-Android |
 | Cefrium (host runtime) | LGPL-3.0-or-later | https://codeberg.org/cefrium/cef-android |
 | Chromium Embedded Framework | BSD-3-Clause | https://bitbucket.org/chromiumembedded/cef |
