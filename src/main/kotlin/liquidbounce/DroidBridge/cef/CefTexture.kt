@@ -8,6 +8,7 @@ import com.mojang.renderpearl.api.textures.GpuTexture
 import com.mojang.renderpearl.api.textures.GpuTextureView
 import net.minecraft.client.gui.render.TextureSetup
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 internal class CefTexture {
 
@@ -35,8 +36,11 @@ internal class CefTexture {
         RenderSystem.assertOnRenderThread()
         val target = ensure(frameWidth, frameHeight)
 
+        val pixels = frameWidth * frameHeight
+        swapRedBlue(buffer, pixels)
+
         buffer.clear()
-        buffer.limit(frameWidth * frameHeight * 4)
+        buffer.limit(pixels * 4)
         RenderSystem.getDevice().createCommandEncoder().writeToTexture(
             target,
             buffer,
@@ -48,6 +52,28 @@ internal class CefTexture {
             frameHeight
         )
         painted = true
+    }
+
+    /**
+     * In-place BGRA -> RGBA conversion, matching MCEF Engine Plugin's MCEFRenderer.
+     *
+     * libmcef hands us CEF frames in BGRA8888, while the texture below is RGBA8_UNORM.
+     * Reading little-endian turns one pixel into 0xAARRGGBB; swapping byte 0 and byte 2
+     * yields 0xAABBGGRR, i.e. RGBA in memory. Working on Ints keeps this to ~1 pass per
+     * frame instead of four byte operations per pixel.
+     */
+    private fun swapRedBlue(buffer: ByteBuffer, pixelCount: Int) {
+        val ints = buffer.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer()
+        val count = minOf(pixelCount, ints.limit())
+        for (index in 0 until count) {
+            val value = ints.get(index)
+            ints.put(
+                index,
+                (value and 0xFF00FF00.toInt()) or
+                    ((value and 0xFF) shl 16) or
+                    ((value ushr 16) and 0xFF)
+            )
+        }
     }
 
     private fun ensure(frameWidth: Int, frameHeight: Int): GpuTexture {
