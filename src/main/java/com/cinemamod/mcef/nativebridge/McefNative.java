@@ -88,6 +88,14 @@ public final class McefNative {
 
     public static native int loadUrl(long browser, String url);
 
+    public static native int reload(long browser);
+
+    public static native int goBack(long browser);
+
+    public static native int goForward(long browser);
+
+    public static native int stopLoading(long browser);
+
     public static native int evaluateJavaScript(long browser, String script);
 
     public static native int requestDomSnapshot(long browser);

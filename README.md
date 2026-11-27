@@ -1,8 +1,17 @@
 # LiquidBounce DroidBridge
 
-A [LiquidBounce](https://github.com/CCBlueX/LiquidBounce) add-on that renders the client's web UI with CEF on
-Android. The page is rasterized by a Chromium host APK and uploaded as a texture, so the client draws it in-game with
-its own render pipeline.
+A [LiquidBounce](https://github.com/CCBlueX/LiquidBounce) add-on that renders the client's web UI with CEF on Android.
+
+Chromium cannot run inside Minecraft's JVM on Android, so the add-on talks to a separate host process instead. Frames
+come back as BGRA over `127.0.0.1:39090` and are uploaded as a texture, which lets LiquidBounce draw the page with its
+own render pipeline.
+
+The host is the official **MCEF Engine Plugin**: it owns `libcef.so`, runs the CEF browser and serves the IPC bridge.
+This repository only builds the add-on jar; it does not build, bundle or redistribute the host APK.
+
+| Host APK | Where it comes from |
+|---|---|
+| `McefEnginePlugin-0.18.1-arm64-v8a.apk` | [RainClay/Mcef-Android · v0.18.1-plugin](https://github.com/RainClay/Mcef-Android/releases/tag/v0.18.1-plugin) |
 
 ## Requirements
 
@@ -12,7 +21,7 @@ its own render pipeline.
 | Launcher | Zalith Launcher 2 |
 | Game | Minecraft 26.3, Fabric 0.20.0 or newer |
 | Client | LiquidBounce `nextgen` |
-| Host | [DroidBridge Host](https://github.com/lovelisy/LiquidBounce-Addon-DroidBridge/tree/app) (Cefrium 0.19.0) |
+| Host | [MCEF Engine Plugin 0.18.1](https://github.com/RainClay/Mcef-Android/releases/tag/v0.18.1-plugin) (Cefrium 0.18.0, Chromium 156) |
 
 ## How it fits together
 
@@ -20,11 +29,16 @@ its own render pipeline.
 |---|---|
 | `src/main/kotlin/.../cef` | CEF browser backend: creates the browser and uploads its frames as a texture |
 | `src/main/java/com/cinemamod/mcef` | JNI bindings for `libmcef.so`, loaded from the jar |
-| `src/main/resources/natives/android-arm64/libmcef.so` | The MCEF bridge to the host process |
-| Host APK (`app` branch) | Owns `libcef.so`, runs the CEF browser and serves frames over `127.0.0.1:39090` |
+| `src/main/resources/natives/android-arm64/libmcef.so` | The MCEF bridge to the host process, taken from the 0.18.1 release |
+| MCEF Engine Plugin APK | Owns `libcef.so`, runs the CEF browser and serves frames over `127.0.0.1:39090` |
 
-The game process cannot load `libcef.so` itself, so the browser runs in the host APK. The add-on talks to it over the
-local IPC bridge and draws the returned BGRA frames through LiquidBounce's texture pipeline.
+The game process cannot load `libcef.so` itself, so the browser runs in the engine plugin's host process. The add-on
+talks to it over the local IPC bridge and draws the returned BGRA frames through LiquidBounce's texture pipeline.
+
+The bridge uses MCEF IPC protocol version 2. Since 0.18.1 the plugin validates a handshake
+(`{"cmd":"hello","protocol":2,"token":"mcef-ipc-v2"}`) within three seconds of every connection, so the bundled
+`libmcef.so` and the installed plugin must come from the same release. Mixing versions fails with
+`handshake rejected: protocol ...` in the plugin log.
 
 ## Building
 
@@ -36,9 +50,14 @@ CI builds the jar on `main` and publishes it to the `snapshot` release.
 
 ## Installing
 
-1. Install the host APK from the `app` branch and open it once to start the host service.
+1. Install `McefEnginePlugin-0.18.1-arm64-v8a.apk` from the
+   [official release](https://github.com/RainClay/Mcef-Android/releases/tag/v0.18.1-plugin). It provides `libcef.so`
+   and `libmcef.so`, and its host service starts automatically once the launcher loads the plugin.
 2. Put the jar into the `mods` folder of the client.
 3. Start the game. `droidbridge-cef` is the only selectable browser backend.
+
+> The former `app` branch, which built a private host APK, has been removed. The official plugin replaces it, so there
+> is no separate host build or manual "start host" step anymore.
 
 ## Credits and licenses
 
@@ -48,7 +67,7 @@ This project is licensed under GPL-3.0 (see `LICENSE`).
 |---|---|---|
 | LiquidBounce | GPL-3.0 | https://github.com/CCBlueX/LiquidBounce |
 | MCEF-Android JNI bindings (`McefNative`, `GlfwToAndroidKey`) | GPL-3.0-or-later, Copyright (C) 2026 Rain_Clay and contributors | MCEF Engine Plugin |
-| `libmcef.so` | GPL-3.0-or-later, from the MCEF Engine Plugin | `app` branch of this repository |
+| `libmcef.so` | GPL-3.0-or-later, from the MCEF Engine Plugin | https://github.com/RainClay/Mcef-Android |
 | Cefrium (host runtime) | LGPL-3.0-or-later | https://codeberg.org/cefrium/cef-android |
 | Chromium Embedded Framework | BSD-3-Clause | https://bitbucket.org/chromiumembedded/cef |
 

@@ -46,7 +46,9 @@ internal object CefRuntime {
         )
         check(code == McefNative.OK) {
             "CEF 桥初始化失败（$code）：${McefNative.getLastError() ?: "未知错误"}。" +
-                "请安装 Mcef 引擎插件，并在插件里点“启动承载进程”（$endpoint）。"
+                "请安装 MCEF Engine Plugin 0.18.1 或更新版本（IPC 协议 2），" +
+                "插件会自动启动承载进程（$endpoint）；" +
+                "mod 与插件版本必须一致，否则握手会被拒绝。"
         }
 
         isInitialized = true

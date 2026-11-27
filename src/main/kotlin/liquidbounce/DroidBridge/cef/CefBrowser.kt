@@ -91,13 +91,23 @@ class CefBrowser internal constructor(
     override fun reload() {
         if (!closed) {
             state = BrowserState.Loading
-            McefNative.loadUrl(handle, currentUrl)
+            McefNative.reload(handle)
         }
     }
 
-    override fun goForward() = Unit
+    override fun goForward() {
+        if (!closed) {
+            state = BrowserState.Loading
+            McefNative.goForward(handle)
+        }
+    }
 
-    override fun goBack() = Unit
+    override fun goBack() {
+        if (!closed) {
+            state = BrowserState.Loading
+            McefNative.goBack(handle)
+        }
+    }
 
     override fun update(width: Int, height: Int) {
         if (!viewport.fullScreen) {

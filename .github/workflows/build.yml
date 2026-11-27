@@ -43,7 +43,7 @@ jobs:
 
           NOTES="Automatic build of \`${GITHUB_SHA::7}\` from \`main\`.
 
-          CEF backend only, rendered by the client through the Mcef engine plugin."
+          CEF backend only; rendering and frame IPC come from MCEF Engine Plugin 0.18.1."
 
           gh release delete snapshot --cleanup-tag --yes || true
           gh release create snapshot "$JAR" \

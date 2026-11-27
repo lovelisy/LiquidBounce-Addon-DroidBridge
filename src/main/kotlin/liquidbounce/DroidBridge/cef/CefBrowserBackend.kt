@@ -23,7 +23,7 @@ class CefBrowserBackend : BrowserBackend {
         }.onFailure {
             ErrorHandler.fatal(
                 error = it,
-                additionalMessage = "Starting the CEF browser. Install the Mcef engine plugin and start its host service."
+                additionalMessage = "Starting the CEF browser. Install MCEF Engine Plugin 0.18.1 or newer; it starts the host service automatically."
             )
         }
         whenAvailable()

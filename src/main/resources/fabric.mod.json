@@ -3,7 +3,7 @@
   "id": "liquidbounce-droidbridge",
   "version": "${version}",
   "name": "LiquidBounce DroidBridge",
-  "description": "Shows the client's interface with the web view of Android, drawn on top of the game.",
+  "description": "Renders the client's interface with CEF through the MCEF Engine Plugin, drawn on top of the game.",
   "authors": [
     "lovelisy",
     "Cleverpeople622"
